@@ -1,15 +1,17 @@
 """
-Landcover Classification Utilities - Enhanced Tile Export Module
+Landcover Classification Utilities - Enhanced Tile Export and Normalization Module
 
 This module extends the base geoai functionality with specialized utilities
-for discrete landcover classification. It provides enhanced tile generation
-with background filtering capabilities to improve training efficiency.
+for landcover classification. It provides enhanced tile generation
+with background filtering capabilities to improve training efficiency,
+and radiometric normalization methods for image comparability.
 
 Key Features:
 - Enhanced tile filtering with configurable feature ratio thresholds
 - Separate statistics tracking for different skip reasons
+- Radiometric normalization for multi-temporal/multi-sensor image comparability
 - Maintains full compatibility with base geoai workflow
-- Optimized for discrete landcover classification tasks
+- Optimized for landcover classification tasks
 
 Date: November 2025
 """
@@ -572,33 +574,69 @@ def lirrn(p_n, sub_img, ref_img, num_quantisation_classes=3, num_sampling_rounds
     return norm_img, rmse, r_adj
 
 
-def normalize_radiometric(subject_image, reference_image, method='lirrn', **kwargs):
-    """Normalize subject image to match reference image radiometrically.
+def normalize_radiometric(
+    subject_image,
+    reference_image,
+    method='lirrn',
+    p_n=1000,
+    num_quantisation_classes=3,
+    num_sampling_rounds=3,
+    subsample_ratio=0.1
+):
+    """Normalize subject image to match reference image radiometrically for improved comparability.
+
+    Radiometric normalization adjusts the brightness and contrast of images to make them
+    comparable across different acquisition times, sensors, or atmospheric conditions.
+    This is crucial for landcover classification tasks using multi-temporal or multi-sensor data.
+
+    Currently supports LIRRN (Location-Independent Relative Radiometric Normalization),
+    which uses stratified sampling and linear regression per band to achieve robust normalization.
 
     Parameters
     ----------
     subject_image : np.ndarray
-        Subject image array (H, W, B).
+        Subject image array (H, W, B) to be normalized.
     reference_image : np.ndarray
-        Reference image array (H, W, B).
-    method : str
-        Normalization method ('lirrn' for Location-Independent Relative Radiometric Normalization).
-    **kwargs
-        Additional parameters for the method.
+        Reference image array (H, W, B) with desired radiometric properties.
+    method : str, default 'lirrn'
+        Normalization method. Currently only 'lirrn' is supported.
+    p_n : int, default 1000
+        Number of sample points per quantisation level for LIRRN.
+    num_quantisation_classes : int, default 3
+        Number of brightness strata for stratified sampling in LIRRN.
+    num_sampling_rounds : int, default 3
+        Number of sampling rounds for robustness in LIRRN.
+    subsample_ratio : float, default 0.1
+        Fraction of candidates retained for regression in LIRRN.
 
     Returns
     -------
     normalized_image : np.ndarray
-        Normalized image.
+        Normalized image with radiometric properties matching the reference.
     metrics : dict
-        Dictionary with RMSE and adjusted R² for each band.
+        Dictionary containing:
+        - 'rmse': Root Mean Square Error for each band
+        - 'r_adj': Adjusted R² for each band
+
+    Raises
+    ------
+    NotImplementedError
+        If an unsupported normalization method is specified.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> # Assuming subject_img and ref_img are loaded numpy arrays
+    >>> norm_img, metrics = normalize_radiometric(subject_img, ref_img)
+    >>> print(f"RMSE per band: {metrics['rmse']}")
     """
     if method == 'lirrn':
-        p_n = kwargs.get('p_n', 1000)
-        norm_img, rmse, r_adj = lirrn(p_n, subject_image, reference_image,
-                                      num_quantisation_classes=kwargs.get('num_quantisation_classes', 3),
-                                      num_sampling_rounds=kwargs.get('num_sampling_rounds', 3),
-                                      subsample_ratio=kwargs.get('subsample_ratio', 0.1))
+        norm_img, rmse, r_adj = lirrn(
+            p_n, subject_image, reference_image,
+            num_quantisation_classes=num_quantisation_classes,
+            num_sampling_rounds=num_sampling_rounds,
+            subsample_ratio=subsample_ratio
+        )
         metrics = {'rmse': rmse, 'r_adj': r_adj}
         return norm_img, metrics
     else:
