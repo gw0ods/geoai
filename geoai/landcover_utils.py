@@ -423,20 +423,20 @@ def compute_distances(p_n, a1, b1, id_indices):
     return sub_candidates[id_indices], ref_candidates[id_indices]
 
 
-def compute_sample(p_n, a1, b1, id_indices):
+def compute_sample(p_n, a1, b1, id_indices, num_sampling_rounds=3):
     """Three rounds of distance-based sampling, concatenated (non-zero only).
 
     In the original MATLAB all three calls are identical (max-based).
     The combined pool gives a larger, slightly varied sample set because
     *id_indices* was drawn randomly once at the start.
     """
-    pairs = [compute_distances(p_n, a1, b1, id_indices) for _ in range(3)]  # NUM_SAMPLING_ROUNDS = 3
+    pairs = [compute_distances(p_n, a1, b1, id_indices) for _ in range(num_sampling_rounds)]
     sub_combined = np.concatenate([s[s != 0] for s, _ in pairs])
     ref_combined = np.concatenate([r[r != 0] for _, r in pairs])
     return sub_combined, ref_combined
 
 
-def sample_selection(p_n, a, b, id_indices):
+def sample_selection(p_n, a, b, id_indices, num_sampling_rounds=3):
     """Select representative sample pairs from a single quantisation level.
 
     Parameters
@@ -449,6 +449,8 @@ def sample_selection(p_n, a, b, id_indices):
         Flattened subject pixels (masked by quantisation level; 0 = outside).
     id_indices : np.ndarray
         Random sub-sampling indices.
+    num_sampling_rounds : int
+        Number of sampling rounds.
 
     Returns
     -------
@@ -464,7 +466,7 @@ def sample_selection(p_n, a, b, id_indices):
             return np.array([0.0]), np.array([0.0])
         return b1[:min_len], a1[:min_len]
 
-    sub_1, ref_1 = compute_sample(p_n, a1, b1, id_indices)
+    sub_1, ref_1 = compute_sample(p_n, a1, b1, id_indices, num_sampling_rounds)
 
     # Non-zeros first, then zeros (matches MATLAB behaviour)
     sub = np.concatenate([sub_1[sub_1 != 0], sub_1[sub_1 == 0]])
@@ -508,7 +510,7 @@ def linear_reg(sub_samples, ref_samples, image_band):
     return norm_band, r_adj, rmse
 
 
-def lirrn(p_n, sub_img, ref_img, num_quantisation_classes=3, num_sampling_rounds=3, subsample_ratio=0.1):
+def lirrn(p_n, sub_img, ref_img, num_quantisation_classes=3, num_sampling_rounds=3, subsample_ratio=0.1, random_seed=None):
     """Location-Independent Relative Radiometric Normalization.
 
     Parameters
@@ -525,6 +527,8 @@ def lirrn(p_n, sub_img, ref_img, num_quantisation_classes=3, num_sampling_rounds
         Number of sampling rounds (default: 3).
     subsample_ratio : float
         Fraction of candidates retained (default: 0.1).
+    random_seed : int or None
+        Random seed for reproducibility (default: None).
 
     Returns
     -------
@@ -532,6 +536,9 @@ def lirrn(p_n, sub_img, ref_img, num_quantisation_classes=3, num_sampling_rounds
     rmse     : np.ndarray (B,)
     r_adj    : np.ndarray (B,)
     """
+    if random_seed is not None:
+        np.random.seed(random_seed)
+
     num_bands = sub_img.shape[2]
 
     # Random sub-sampling indices (SUBSAMPLE_RATIO % of p_n), drawn once as in the MATLAB code
@@ -563,7 +570,7 @@ def lirrn(p_n, sub_img, ref_img, num_quantisation_classes=3, num_sampling_rounds
         for level in range(1, num_quantisation_classes + 1):
             a = np.where(ref_labels[:, :, j] == level, ref_img[:, :, j], 0).ravel()
             b = np.where(sub_labels[:, :, j] == level, sub_img[:, :, j], 0).ravel()
-            sub_s, ref_s = sample_selection(p_n, a, b, id_indices)
+            sub_s, ref_s = sample_selection(p_n, a, b, id_indices, num_sampling_rounds)
             sub_list.append(sub_s)
             ref_list.append(ref_s)
 
@@ -581,7 +588,8 @@ def normalize_radiometric(
     p_n=1000,
     num_quantisation_classes=3,
     num_sampling_rounds=3,
-    subsample_ratio=0.1
+    subsample_ratio=0.1,
+    random_seed=None
 ):
     """Normalize subject image to match reference image radiometrically for improved comparability.
 
@@ -601,13 +609,15 @@ def normalize_radiometric(
     method : str, default 'lirrn'
         Normalization method. Currently only 'lirrn' is supported.
     p_n : int, default 1000
-        Number of sample points per quantisation level for LIRRN.
+        Number of sample points per quantisation level for LIRRN (NUM_SAMPLE_POINTS).
     num_quantisation_classes : int, default 3
-        Number of brightness strata for stratified sampling in LIRRN.
+        Number of brightness strata for stratified sampling in LIRRN (NUM_QUANTISATION_CLASSES).
     num_sampling_rounds : int, default 3
-        Number of sampling rounds for robustness in LIRRN.
+        Number of sampling rounds for robustness in LIRRN (NUM_SAMPLING_ROUNDS).
     subsample_ratio : float, default 0.1
-        Fraction of candidates retained for regression in LIRRN.
+        Fraction of candidates retained for regression in LIRRN (SUBSAMPLE_RATIO).
+    random_seed : int or None, default None
+        Random seed for reproducible results (RANDOM_SEED).
 
     Returns
     -------
@@ -635,7 +645,8 @@ def normalize_radiometric(
             p_n, subject_image, reference_image,
             num_quantisation_classes=num_quantisation_classes,
             num_sampling_rounds=num_sampling_rounds,
-            subsample_ratio=subsample_ratio
+            subsample_ratio=subsample_ratio,
+            random_seed=random_seed
         )
         metrics = {'rmse': rmse, 'r_adj': r_adj}
         return norm_img, metrics
