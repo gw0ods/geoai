@@ -24,6 +24,8 @@ import numpy as np
 import rasterio
 from rasterio import features
 from rasterio.windows import Window
+from sklearn.linear_model import LinearRegression
+from skimage.filters import threshold_multiotsu
 from tqdm import tqdm
 
 
@@ -381,3 +383,223 @@ def export_landcover_tiles(
         print(f"{'='*60}\n")
 
     return stats
+
+
+# ----------------------------------------------------------------------------
+# Radiometric Normalization Functions
+# ----------------------------------------------------------------------------
+
+def compute_distances(p_n, a1, b1, id_indices):
+    """Select P_N samples closest to the maximum value, then subsample with *id_indices*.
+
+    Parameters
+    ----------
+    p_n : int
+        Number of candidate samples to draw from each array.
+    a1 : np.ndarray
+        Non-zero reference pixel values (1-D).
+    b1 : np.ndarray
+        Non-zero subject pixel values (1-D).
+    id_indices : np.ndarray
+        Random indices used to subsample from the P_N candidates.
+
+    Returns
+    -------
+    sub, ref : np.ndarray
+        Subsampled subject and reference values.
+    """
+    # Reference: P_N values closest to max
+    max_ref = np.max(a1)
+    idx_ref = np.argsort(np.abs(a1 - max_ref))
+    ref_candidates = a1[idx_ref[:p_n]]
+
+    # Subject: P_N values closest to max
+    max_sub = np.max(b1)
+    idx_sub = np.argsort(np.abs(b1 - max_sub))
+    sub_candidates = b1[idx_sub[:p_n]]
+
+    return sub_candidates[id_indices], ref_candidates[id_indices]
+
+
+def compute_sample(p_n, a1, b1, id_indices):
+    """Three rounds of distance-based sampling, concatenated (non-zero only).
+
+    In the original MATLAB all three calls are identical (max-based).
+    The combined pool gives a larger, slightly varied sample set because
+    *id_indices* was drawn randomly once at the start.
+    """
+    pairs = [compute_distances(p_n, a1, b1, id_indices) for _ in range(3)]  # NUM_SAMPLING_ROUNDS = 3
+    sub_combined = np.concatenate([s[s != 0] for s, _ in pairs])
+    ref_combined = np.concatenate([r[r != 0] for _, r in pairs])
+    return sub_combined, ref_combined
+
+
+def sample_selection(p_n, a, b, id_indices):
+    """Select representative sample pairs from a single quantisation level.
+
+    Parameters
+    ----------
+    p_n : int
+        Number of sample points.
+    a : np.ndarray
+        Flattened reference pixels (masked by quantisation level; 0 = outside).
+    b : np.ndarray
+        Flattened subject pixels (masked by quantisation level; 0 = outside).
+    id_indices : np.ndarray
+        Random sub-sampling indices.
+
+    Returns
+    -------
+    sub, ref : np.ndarray   (1-D each)
+    """
+    a1 = a[a != 0]
+    b1 = b[b != 0]
+
+    # Guard: not enough pixels in this quantisation level
+    if len(a1) < p_n or len(b1) < p_n:
+        min_len = min(len(a1), len(b1))
+        if min_len == 0:
+            return np.array([0.0]), np.array([0.0])
+        return b1[:min_len], a1[:min_len]
+
+    sub_1, ref_1 = compute_sample(p_n, a1, b1, id_indices)
+
+    # Non-zeros first, then zeros (matches MATLAB behaviour)
+    sub = np.concatenate([sub_1[sub_1 != 0], sub_1[sub_1 == 0]])
+    ref = np.concatenate([ref_1[ref_1 != 0], ref_1[ref_1 == 0]])
+    return sub, ref
+
+
+def linear_reg(sub_samples, ref_samples, image_band):
+    """OLS linear regression: ``ref = intercept + slope * sub``, applied to *image_band*.
+
+    Parameters
+    ----------
+    sub_samples : np.ndarray  (1-D)
+    ref_samples : np.ndarray  (1-D)
+    image_band  : np.ndarray  (H, W)
+
+    Returns
+    -------
+    norm_band : np.ndarray (H, W)
+    r_adj     : float   – adjusted R²
+    rmse      : float
+    """
+    X = sub_samples.reshape(-1, 1)
+    y = ref_samples
+
+    model = LinearRegression().fit(X, y)
+    intercept, slope = model.intercept_, model.coef_[0]
+
+    # Apply transformation
+    norm_band = intercept + slope * image_band
+
+    # Goodness-of-fit metrics
+    y_pred = model.predict(X)
+    ss_res = np.sum((y - y_pred) ** 2)
+    ss_tot = np.sum((y - np.mean(y)) ** 2)
+    n = len(y)
+    r2 = 1 - ss_res / ss_tot if ss_tot != 0 else 0.0
+    r_adj = 1 - (1 - r2) * (n - 1) / (n - 2) if n > 2 else 0.0
+    rmse = np.sqrt(np.mean((y - y_pred) ** 2))
+
+    return norm_band, r_adj, rmse
+
+
+def lirrn(p_n, sub_img, ref_img, num_quantisation_classes=3, num_sampling_rounds=3, subsample_ratio=0.1):
+    """Location-Independent Relative Radiometric Normalization.
+
+    Parameters
+    ----------
+    p_n : int
+        Number of sample points per quantisation level.
+    sub_img : np.ndarray  (H, W, B) float64
+        Subject image.
+    ref_img : np.ndarray  (H, W, B) float64
+        Reference image.
+    num_quantisation_classes : int
+        Number of brightness strata (default: 3).
+    num_sampling_rounds : int
+        Number of sampling rounds (default: 3).
+    subsample_ratio : float
+        Fraction of candidates retained (default: 0.1).
+
+    Returns
+    -------
+    norm_img : np.ndarray (H, W, B)
+    rmse     : np.ndarray (B,)
+    r_adj    : np.ndarray (B,)
+    """
+    num_bands = sub_img.shape[2]
+
+    # Random sub-sampling indices (SUBSAMPLE_RATIO % of p_n), drawn once as in the MATLAB code
+    id_indices = np.random.randint(0, p_n, size=max(1, round(subsample_ratio * p_n)))
+
+    norm_img = np.zeros_like(sub_img, dtype=np.float64)
+    rmse = np.zeros(num_bands)
+    r_adj = np.zeros(num_bands)
+
+    # --- Quantise each band into NUM_QUANTISATION_CLASSES levels (multi-Otsu) ---
+    sub_labels = np.zeros_like(sub_img, dtype=np.int32)
+    ref_labels = np.zeros_like(ref_img, dtype=np.int32)
+
+    for j in range(num_bands):
+        for img, labels in [(sub_img, sub_labels), (ref_img, ref_labels)]:
+            nonzero = img[:, :, j][img[:, :, j] != 0]
+            if len(nonzero) > 0:
+                try:
+                    thresh = threshold_multiotsu(nonzero, classes=num_quantisation_classes)
+                    # np.digitize + 1 gives labels 1, 2, 3... like MATLAB imquantize
+                    labels[:, :, j] = np.digitize(img[:, :, j], bins=thresh) + 1
+                except ValueError:
+                    labels[:, :, j] = 1
+
+    # --- For each band: sample from NUM_QUANTISATION_CLASSES levels then regress ---
+    for j in range(num_bands):
+        sub_list, ref_list = [], []
+
+        for level in range(1, num_quantisation_classes + 1):
+            a = np.where(ref_labels[:, :, j] == level, ref_img[:, :, j], 0).ravel()
+            b = np.where(sub_labels[:, :, j] == level, sub_img[:, :, j], 0).ravel()
+            sub_s, ref_s = sample_selection(p_n, a, b, id_indices)
+            sub_list.append(sub_s)
+            ref_list.append(ref_s)
+
+        all_sub = np.concatenate(sub_list)
+        all_ref = np.concatenate(ref_list)
+        norm_img[:, :, j], r_adj[j], rmse[j] = linear_reg(all_sub, all_ref, sub_img[:, :, j])
+
+    return norm_img, rmse, r_adj
+
+
+def normalize_radiometric(subject_image, reference_image, method='lirrn', **kwargs):
+    """Normalize subject image to match reference image radiometrically.
+
+    Parameters
+    ----------
+    subject_image : np.ndarray
+        Subject image array (H, W, B).
+    reference_image : np.ndarray
+        Reference image array (H, W, B).
+    method : str
+        Normalization method ('lirrn' for Location-Independent Relative Radiometric Normalization).
+    **kwargs
+        Additional parameters for the method.
+
+    Returns
+    -------
+    normalized_image : np.ndarray
+        Normalized image.
+    metrics : dict
+        Dictionary with RMSE and adjusted R² for each band.
+    """
+    if method == 'lirrn':
+        p_n = kwargs.get('p_n', 1000)
+        norm_img, rmse, r_adj = lirrn(p_n, subject_image, reference_image,
+                                      num_quantisation_classes=kwargs.get('num_quantisation_classes', 3),
+                                      num_sampling_rounds=kwargs.get('num_sampling_rounds', 3),
+                                      subsample_ratio=kwargs.get('subsample_ratio', 0.1))
+        metrics = {'rmse': rmse, 'r_adj': r_adj}
+        return norm_img, metrics
+    else:
+        raise NotImplementedError(f"Normalization method '{method}' not implemented.")
