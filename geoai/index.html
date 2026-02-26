@@ -4126,6 +4126,39 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#geoai.geoai.normalize_radiometric--raises" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Raises
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#geoai.geoai.normalize_radiometric--examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#geoai.geoai.normalize_radiometric--assuming-subject_img-and-ref_img-are-loaded-numpy-arrays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assuming subject_img and ref_img are loaded numpy arrays
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -6396,6 +6429,39 @@
     <span class="md-ellipsis">
       
         Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#geoai.geoai.normalize_radiometric--raises" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Raises
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#geoai.geoai.normalize_radiometric--examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#geoai.geoai.normalize_radiometric--assuming-subject_img-and-ref_img-are-loaded-numpy-arrays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assuming subject_img and ref_img are loaded numpy arrays
       
     </span>
   </a>
@@ -33418,9 +33484,7 @@ id_indices : np.ndarray
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>geoai/landcover_utils.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">392</span>
-<span class="normal">393</span>
-<span class="normal">394</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">394</span>
 <span class="normal">395</span>
 <span class="normal">396</span>
 <span class="normal">397</span>
@@ -33447,7 +33511,9 @@ id_indices : np.ndarray
 <span class="normal">418</span>
 <span class="normal">419</span>
 <span class="normal">420</span>
-<span class="normal">421</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_distances</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">):</span>
+<span class="normal">421</span>
+<span class="normal">422</span>
+<span class="normal">423</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_distances</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Select P_N samples closest to the maximum value, then subsample with *id_indices*.</span>
 
 <span class="sd">    Parameters</span>
@@ -33502,9 +33568,7 @@ The combined pool gives a larger, slightly varied sample set because
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>geoai/landcover_utils.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">424</span>
-<span class="normal">425</span>
-<span class="normal">426</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">426</span>
 <span class="normal">427</span>
 <span class="normal">428</span>
 <span class="normal">429</span>
@@ -33512,7 +33576,9 @@ The combined pool gives a larger, slightly varied sample set because
 <span class="normal">431</span>
 <span class="normal">432</span>
 <span class="normal">433</span>
-<span class="normal">434</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_sample</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">):</span>
+<span class="normal">434</span>
+<span class="normal">435</span>
+<span class="normal">436</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_sample</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Three rounds of distance-based sampling, concatenated (non-zero only).</span>
 
 <span class="sd">    In the original MATLAB all three calls are identical (max-based).</span>
@@ -41110,9 +41176,7 @@ parameter counts non-zero pixels as "features".</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>geoai/landcover_utils.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 32</span>
-<span class="normal"> 33</span>
-<span class="normal"> 34</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 34</span>
 <span class="normal"> 35</span>
 <span class="normal"> 36</span>
 <span class="normal"> 37</span>
@@ -41463,7 +41527,9 @@ parameter counts non-zero pixels as "features".</p>
 <span class="normal">382</span>
 <span class="normal">383</span>
 <span class="normal">384</span>
-<span class="normal">385</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">export_landcover_tiles</span><span class="p">(</span>
+<span class="normal">385</span>
+<span class="normal">386</span>
+<span class="normal">387</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">export_landcover_tiles</span><span class="p">(</span>
     <span class="n">in_raster</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">out_folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">in_class_data</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">gpd</span><span class="o">.</span><span class="n">GeoDataFrame</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -48077,9 +48143,7 @@ rmse      : float</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>geoai/landcover_utils.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">473</span>
-<span class="normal">474</span>
-<span class="normal">475</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">475</span>
 <span class="normal">476</span>
 <span class="normal">477</span>
 <span class="normal">478</span>
@@ -48110,7 +48174,9 @@ rmse      : float</p>
 <span class="normal">503</span>
 <span class="normal">504</span>
 <span class="normal">505</span>
-<span class="normal">506</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">linear_reg</span><span class="p">(</span><span class="n">sub_samples</span><span class="p">,</span> <span class="n">ref_samples</span><span class="p">,</span> <span class="n">image_band</span><span class="p">):</span>
+<span class="normal">506</span>
+<span class="normal">507</span>
+<span class="normal">508</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">linear_reg</span><span class="p">(</span><span class="n">sub_samples</span><span class="p">,</span> <span class="n">ref_samples</span><span class="p">,</span> <span class="n">image_band</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;OLS linear regression: ``ref = intercept + slope * sub``, applied to *image_band*.</span>
 
 <span class="sd">    Parameters</span>
@@ -48183,9 +48249,7 @@ r_adj    : np.ndarray (B,)</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>geoai/landcover_utils.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">509</span>
-<span class="normal">510</span>
-<span class="normal">511</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">511</span>
 <span class="normal">512</span>
 <span class="normal">513</span>
 <span class="normal">514</span>
@@ -48246,7 +48310,9 @@ r_adj    : np.ndarray (B,)</p>
 <span class="normal">569</span>
 <span class="normal">570</span>
 <span class="normal">571</span>
-<span class="normal">572</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">lirrn</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">sub_img</span><span class="p">,</span> <span class="n">ref_img</span><span class="p">,</span> <span class="n">num_quantisation_classes</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">num_sampling_rounds</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">subsample_ratio</span><span class="o">=</span><span class="mf">0.1</span><span class="p">):</span>
+<span class="normal">572</span>
+<span class="normal">573</span>
+<span class="normal">574</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">lirrn</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">sub_img</span><span class="p">,</span> <span class="n">ref_img</span><span class="p">,</span> <span class="n">num_quantisation_classes</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">num_sampling_rounds</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">subsample_ratio</span><span class="o">=</span><span class="mf">0.1</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Location-Independent Relative Radiometric Normalization.</span>
 
 <span class="sd">    Parameters</span>
@@ -50124,35 +50190,60 @@ Defaults to None.</p>
 
 
 <h2 id="geoai.geoai.normalize_radiometric" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">normalize_radiometric</span><span class="p">(</span><span class="n">subject_image</span><span class="p">,</span> <span class="n">reference_image</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;lirrn&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">normalize_radiometric</span><span class="p">(</span><span class="n">subject_image</span><span class="p">,</span> <span class="n">reference_image</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;lirrn&#39;</span><span class="p">,</span> <span class="n">p_n</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">num_quantisation_classes</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">num_sampling_rounds</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">subsample_ratio</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span></code>
 
 <a href="#geoai.geoai.normalize_radiometric" class="headerlink" title="Permanent link">&para;</a></h2>
 
 
     <div class="doc doc-contents ">
 
-        <p>Normalize subject image to match reference image radiometrically.</p>
+        <p>Normalize subject image to match reference image radiometrically for improved comparability.</p>
+<p>Radiometric normalization adjusts the brightness and contrast of images to make them
+comparable across different acquisition times, sensors, or atmospheric conditions.
+This is crucial for landcover classification tasks using multi-temporal or multi-sensor data.</p>
+<p>Currently supports LIRRN (Location-Independent Relative Radiometric Normalization),
+which uses stratified sampling and linear regression per band to achieve robust normalization.</p>
 <h4 id="geoai.geoai.normalize_radiometric--parameters">Parameters<a class="headerlink" href="#geoai.geoai.normalize_radiometric--parameters" title="Permanent link">&para;</a></h4>
 <p>subject_image : np.ndarray
-    Subject image array (H, W, B).
+    Subject image array (H, W, B) to be normalized.
 reference_image : np.ndarray
-    Reference image array (H, W, B).
-method : str
-    Normalization method ('lirrn' for Location-Independent Relative Radiometric Normalization).
-**kwargs
-    Additional parameters for the method.</p>
+    Reference image array (H, W, B) with desired radiometric properties.
+method : str, default 'lirrn'
+    Normalization method. Currently only 'lirrn' is supported.
+p_n : int, default 1000
+    Number of sample points per quantisation level for LIRRN.
+num_quantisation_classes : int, default 3
+    Number of brightness strata for stratified sampling in LIRRN.
+num_sampling_rounds : int, default 3
+    Number of sampling rounds for robustness in LIRRN.
+subsample_ratio : float, default 0.1
+    Fraction of candidates retained for regression in LIRRN.</p>
 <h4 id="geoai.geoai.normalize_radiometric--returns">Returns<a class="headerlink" href="#geoai.geoai.normalize_radiometric--returns" title="Permanent link">&para;</a></h4>
 <p>normalized_image : np.ndarray
-    Normalized image.
+    Normalized image with radiometric properties matching the reference.
 metrics : dict
-    Dictionary with RMSE and adjusted R² for each band.</p>
+    Dictionary containing:
+    - 'rmse': Root Mean Square Error for each band
+    - 'r_adj': Adjusted R² for each band</p>
+<h4 id="geoai.geoai.normalize_radiometric--raises">Raises<a class="headerlink" href="#geoai.geoai.normalize_radiometric--raises" title="Permanent link">&para;</a></h4>
+<p>NotImplementedError
+    If an unsupported normalization method is specified.</p>
+<h4 id="geoai.geoai.normalize_radiometric--examples">Examples<a class="headerlink" href="#geoai.geoai.normalize_radiometric--examples" title="Permanent link">&para;</a></h4>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>import numpy as np</p>
+<h3 id="geoai.geoai.normalize_radiometric--assuming-subject_img-and-ref_img-are-loaded-numpy-arrays">Assuming subject_img and ref_img are loaded numpy arrays<a class="headerlink" href="#geoai.geoai.normalize_radiometric--assuming-subject_img-and-ref_img-are-loaded-numpy-arrays" title="Permanent link">&para;</a></h3>
+<p>norm_img, metrics = normalize_radiometric(subject_img, ref_img)
+print(f"RMSE per band: {metrics['rmse']}")</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>geoai/landcover_utils.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">575</span>
-<span class="normal">576</span>
-<span class="normal">577</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">577</span>
 <span class="normal">578</span>
 <span class="normal">579</span>
 <span class="normal">580</span>
@@ -50180,33 +50271,107 @@ metrics : dict
 <span class="normal">602</span>
 <span class="normal">603</span>
 <span class="normal">604</span>
-<span class="normal">605</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">normalize_radiometric</span><span class="p">(</span><span class="n">subject_image</span><span class="p">,</span> <span class="n">reference_image</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;lirrn&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Normalize subject image to match reference image radiometrically.</span>
+<span class="normal">605</span>
+<span class="normal">606</span>
+<span class="normal">607</span>
+<span class="normal">608</span>
+<span class="normal">609</span>
+<span class="normal">610</span>
+<span class="normal">611</span>
+<span class="normal">612</span>
+<span class="normal">613</span>
+<span class="normal">614</span>
+<span class="normal">615</span>
+<span class="normal">616</span>
+<span class="normal">617</span>
+<span class="normal">618</span>
+<span class="normal">619</span>
+<span class="normal">620</span>
+<span class="normal">621</span>
+<span class="normal">622</span>
+<span class="normal">623</span>
+<span class="normal">624</span>
+<span class="normal">625</span>
+<span class="normal">626</span>
+<span class="normal">627</span>
+<span class="normal">628</span>
+<span class="normal">629</span>
+<span class="normal">630</span>
+<span class="normal">631</span>
+<span class="normal">632</span>
+<span class="normal">633</span>
+<span class="normal">634</span>
+<span class="normal">635</span>
+<span class="normal">636</span>
+<span class="normal">637</span>
+<span class="normal">638</span>
+<span class="normal">639</span>
+<span class="normal">640</span>
+<span class="normal">641</span>
+<span class="normal">642</span>
+<span class="normal">643</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">normalize_radiometric</span><span class="p">(</span>
+    <span class="n">subject_image</span><span class="p">,</span>
+    <span class="n">reference_image</span><span class="p">,</span>
+    <span class="n">method</span><span class="o">=</span><span class="s1">&#39;lirrn&#39;</span><span class="p">,</span>
+    <span class="n">p_n</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+    <span class="n">num_quantisation_classes</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+    <span class="n">num_sampling_rounds</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+    <span class="n">subsample_ratio</span><span class="o">=</span><span class="mf">0.1</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Normalize subject image to match reference image radiometrically for improved comparability.</span>
+
+<span class="sd">    Radiometric normalization adjusts the brightness and contrast of images to make them</span>
+<span class="sd">    comparable across different acquisition times, sensors, or atmospheric conditions.</span>
+<span class="sd">    This is crucial for landcover classification tasks using multi-temporal or multi-sensor data.</span>
+
+<span class="sd">    Currently supports LIRRN (Location-Independent Relative Radiometric Normalization),</span>
+<span class="sd">    which uses stratified sampling and linear regression per band to achieve robust normalization.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    subject_image : np.ndarray</span>
-<span class="sd">        Subject image array (H, W, B).</span>
+<span class="sd">        Subject image array (H, W, B) to be normalized.</span>
 <span class="sd">    reference_image : np.ndarray</span>
-<span class="sd">        Reference image array (H, W, B).</span>
-<span class="sd">    method : str</span>
-<span class="sd">        Normalization method (&#39;lirrn&#39; for Location-Independent Relative Radiometric Normalization).</span>
-<span class="sd">    **kwargs</span>
-<span class="sd">        Additional parameters for the method.</span>
+<span class="sd">        Reference image array (H, W, B) with desired radiometric properties.</span>
+<span class="sd">    method : str, default &#39;lirrn&#39;</span>
+<span class="sd">        Normalization method. Currently only &#39;lirrn&#39; is supported.</span>
+<span class="sd">    p_n : int, default 1000</span>
+<span class="sd">        Number of sample points per quantisation level for LIRRN.</span>
+<span class="sd">    num_quantisation_classes : int, default 3</span>
+<span class="sd">        Number of brightness strata for stratified sampling in LIRRN.</span>
+<span class="sd">    num_sampling_rounds : int, default 3</span>
+<span class="sd">        Number of sampling rounds for robustness in LIRRN.</span>
+<span class="sd">    subsample_ratio : float, default 0.1</span>
+<span class="sd">        Fraction of candidates retained for regression in LIRRN.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    normalized_image : np.ndarray</span>
-<span class="sd">        Normalized image.</span>
+<span class="sd">        Normalized image with radiometric properties matching the reference.</span>
 <span class="sd">    metrics : dict</span>
-<span class="sd">        Dictionary with RMSE and adjusted R² for each band.</span>
+<span class="sd">        Dictionary containing:</span>
+<span class="sd">        - &#39;rmse&#39;: Root Mean Square Error for each band</span>
+<span class="sd">        - &#39;r_adj&#39;: Adjusted R² for each band</span>
+
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    NotImplementedError</span>
+<span class="sd">        If an unsupported normalization method is specified.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; import numpy as np</span>
+<span class="sd">    &gt;&gt;&gt; # Assuming subject_img and ref_img are loaded numpy arrays</span>
+<span class="sd">    &gt;&gt;&gt; norm_img, metrics = normalize_radiometric(subject_img, ref_img)</span>
+<span class="sd">    &gt;&gt;&gt; print(f&quot;RMSE per band: {metrics[&#39;rmse&#39;]}&quot;)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s1">&#39;lirrn&#39;</span><span class="p">:</span>
-        <span class="n">p_n</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;p_n&#39;</span><span class="p">,</span> <span class="mi">1000</span><span class="p">)</span>
-        <span class="n">norm_img</span><span class="p">,</span> <span class="n">rmse</span><span class="p">,</span> <span class="n">r_adj</span> <span class="o">=</span> <span class="n">lirrn</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">subject_image</span><span class="p">,</span> <span class="n">reference_image</span><span class="p">,</span>
-                                      <span class="n">num_quantisation_classes</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;num_quantisation_classes&#39;</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span>
-                                      <span class="n">num_sampling_rounds</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;num_sampling_rounds&#39;</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span>
-                                      <span class="n">subsample_ratio</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;subsample_ratio&#39;</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">))</span>
+        <span class="n">norm_img</span><span class="p">,</span> <span class="n">rmse</span><span class="p">,</span> <span class="n">r_adj</span> <span class="o">=</span> <span class="n">lirrn</span><span class="p">(</span>
+            <span class="n">p_n</span><span class="p">,</span> <span class="n">subject_image</span><span class="p">,</span> <span class="n">reference_image</span><span class="p">,</span>
+            <span class="n">num_quantisation_classes</span><span class="o">=</span><span class="n">num_quantisation_classes</span><span class="p">,</span>
+            <span class="n">num_sampling_rounds</span><span class="o">=</span><span class="n">num_sampling_rounds</span><span class="p">,</span>
+            <span class="n">subsample_ratio</span><span class="o">=</span><span class="n">subsample_ratio</span>
+        <span class="p">)</span>
         <span class="n">metrics</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;rmse&#39;</span><span class="p">:</span> <span class="n">rmse</span><span class="p">,</span> <span class="s1">&#39;r_adj&#39;</span><span class="p">:</span> <span class="n">r_adj</span><span class="p">}</span>
         <span class="k">return</span> <span class="n">norm_img</span><span class="p">,</span> <span class="n">metrics</span>
     <span class="k">else</span><span class="p">:</span>
@@ -58054,9 +58219,7 @@ id_indices : np.ndarray
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>geoai/landcover_utils.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">437</span>
-<span class="normal">438</span>
-<span class="normal">439</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">439</span>
 <span class="normal">440</span>
 <span class="normal">441</span>
 <span class="normal">442</span>
@@ -58087,7 +58250,9 @@ id_indices : np.ndarray
 <span class="normal">467</span>
 <span class="normal">468</span>
 <span class="normal">469</span>
-<span class="normal">470</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">sample_selection</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">):</span>
+<span class="normal">470</span>
+<span class="normal">471</span>
+<span class="normal">472</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">sample_selection</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Select representative sample pairs from a single quantisation level.</span>
 
 <span class="sd">    Parameters</span>
