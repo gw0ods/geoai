@@ -33553,7 +33553,7 @@ id_indices : np.ndarray
 
 
 <h2 id="geoai.geoai.compute_sample" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">compute_sample</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">compute_sample</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">,</span> <span class="n">num_sampling_rounds</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span></code>
 
 <a href="#geoai.geoai.compute_sample" class="headerlink" title="Permanent link">&para;</a></h2>
 
@@ -33578,14 +33578,14 @@ The combined pool gives a larger, slightly varied sample set because
 <span class="normal">433</span>
 <span class="normal">434</span>
 <span class="normal">435</span>
-<span class="normal">436</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_sample</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">):</span>
+<span class="normal">436</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_sample</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">,</span> <span class="n">num_sampling_rounds</span><span class="o">=</span><span class="mi">3</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Three rounds of distance-based sampling, concatenated (non-zero only).</span>
 
 <span class="sd">    In the original MATLAB all three calls are identical (max-based).</span>
 <span class="sd">    The combined pool gives a larger, slightly varied sample set because</span>
 <span class="sd">    *id_indices* was drawn randomly once at the start.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">pairs</span> <span class="o">=</span> <span class="p">[</span><span class="n">compute_distances</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">)]</span>  <span class="c1"># NUM_SAMPLING_ROUNDS = 3</span>
+    <span class="n">pairs</span> <span class="o">=</span> <span class="p">[</span><span class="n">compute_distances</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_sampling_rounds</span><span class="p">)]</span>
     <span class="n">sub_combined</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">s</span><span class="p">[</span><span class="n">s</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">pairs</span><span class="p">])</span>
     <span class="n">ref_combined</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">r</span><span class="p">[</span><span class="n">r</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">pairs</span><span class="p">])</span>
     <span class="k">return</span> <span class="n">sub_combined</span><span class="p">,</span> <span class="n">ref_combined</span>
@@ -48143,9 +48143,7 @@ rmse      : float</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>geoai/landcover_utils.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">475</span>
-<span class="normal">476</span>
-<span class="normal">477</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">477</span>
 <span class="normal">478</span>
 <span class="normal">479</span>
 <span class="normal">480</span>
@@ -48176,7 +48174,9 @@ rmse      : float</p>
 <span class="normal">505</span>
 <span class="normal">506</span>
 <span class="normal">507</span>
-<span class="normal">508</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">linear_reg</span><span class="p">(</span><span class="n">sub_samples</span><span class="p">,</span> <span class="n">ref_samples</span><span class="p">,</span> <span class="n">image_band</span><span class="p">):</span>
+<span class="normal">508</span>
+<span class="normal">509</span>
+<span class="normal">510</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">linear_reg</span><span class="p">(</span><span class="n">sub_samples</span><span class="p">,</span> <span class="n">ref_samples</span><span class="p">,</span> <span class="n">image_band</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;OLS linear regression: ``ref = intercept + slope * sub``, applied to *image_band*.</span>
 
 <span class="sd">    Parameters</span>
@@ -48220,7 +48220,7 @@ rmse      : float</p>
 
 
 <h2 id="geoai.geoai.lirrn" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">lirrn</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">sub_img</span><span class="p">,</span> <span class="n">ref_img</span><span class="p">,</span> <span class="n">num_quantisation_classes</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">num_sampling_rounds</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">subsample_ratio</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">lirrn</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">sub_img</span><span class="p">,</span> <span class="n">ref_img</span><span class="p">,</span> <span class="n">num_quantisation_classes</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">num_sampling_rounds</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">subsample_ratio</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">random_seed</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#geoai.geoai.lirrn" class="headerlink" title="Permanent link">&para;</a></h2>
 
@@ -48240,7 +48240,9 @@ num_quantisation_classes : int
 num_sampling_rounds : int
     Number of sampling rounds (default: 3).
 subsample_ratio : float
-    Fraction of candidates retained (default: 0.1).</p>
+    Fraction of candidates retained (default: 0.1).
+random_seed : int or None
+    Random seed for reproducibility (default: None).</p>
 <h4 id="geoai.geoai.lirrn--returns">Returns<a class="headerlink" href="#geoai.geoai.lirrn--returns" title="Permanent link">&para;</a></h4>
 <p>norm_img : np.ndarray (H, W, B)
 rmse     : np.ndarray (B,)
@@ -48249,9 +48251,7 @@ r_adj    : np.ndarray (B,)</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>geoai/landcover_utils.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">511</span>
-<span class="normal">512</span>
-<span class="normal">513</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">513</span>
 <span class="normal">514</span>
 <span class="normal">515</span>
 <span class="normal">516</span>
@@ -48312,7 +48312,14 @@ r_adj    : np.ndarray (B,)</p>
 <span class="normal">571</span>
 <span class="normal">572</span>
 <span class="normal">573</span>
-<span class="normal">574</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">lirrn</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">sub_img</span><span class="p">,</span> <span class="n">ref_img</span><span class="p">,</span> <span class="n">num_quantisation_classes</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">num_sampling_rounds</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">subsample_ratio</span><span class="o">=</span><span class="mf">0.1</span><span class="p">):</span>
+<span class="normal">574</span>
+<span class="normal">575</span>
+<span class="normal">576</span>
+<span class="normal">577</span>
+<span class="normal">578</span>
+<span class="normal">579</span>
+<span class="normal">580</span>
+<span class="normal">581</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">lirrn</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">sub_img</span><span class="p">,</span> <span class="n">ref_img</span><span class="p">,</span> <span class="n">num_quantisation_classes</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">num_sampling_rounds</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">subsample_ratio</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">random_seed</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Location-Independent Relative Radiometric Normalization.</span>
 
 <span class="sd">    Parameters</span>
@@ -48329,6 +48336,8 @@ r_adj    : np.ndarray (B,)</p>
 <span class="sd">        Number of sampling rounds (default: 3).</span>
 <span class="sd">    subsample_ratio : float</span>
 <span class="sd">        Fraction of candidates retained (default: 0.1).</span>
+<span class="sd">    random_seed : int or None</span>
+<span class="sd">        Random seed for reproducibility (default: None).</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -48336,6 +48345,9 @@ r_adj    : np.ndarray (B,)</p>
 <span class="sd">    rmse     : np.ndarray (B,)</span>
 <span class="sd">    r_adj    : np.ndarray (B,)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">random_seed</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">random_seed</span><span class="p">)</span>
+
     <span class="n">num_bands</span> <span class="o">=</span> <span class="n">sub_img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
 
     <span class="c1"># Random sub-sampling indices (SUBSAMPLE_RATIO % of p_n), drawn once as in the MATLAB code</span>
@@ -48367,7 +48379,7 @@ r_adj    : np.ndarray (B,)</p>
         <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">num_quantisation_classes</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
             <span class="n">a</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">ref_labels</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">j</span><span class="p">]</span> <span class="o">==</span> <span class="n">level</span><span class="p">,</span> <span class="n">ref_img</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">j</span><span class="p">],</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
             <span class="n">b</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">sub_labels</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">j</span><span class="p">]</span> <span class="o">==</span> <span class="n">level</span><span class="p">,</span> <span class="n">sub_img</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">j</span><span class="p">],</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
-            <span class="n">sub_s</span><span class="p">,</span> <span class="n">ref_s</span> <span class="o">=</span> <span class="n">sample_selection</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">)</span>
+            <span class="n">sub_s</span><span class="p">,</span> <span class="n">ref_s</span> <span class="o">=</span> <span class="n">sample_selection</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">,</span> <span class="n">num_sampling_rounds</span><span class="p">)</span>
             <span class="n">sub_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sub_s</span><span class="p">)</span>
             <span class="n">ref_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ref_s</span><span class="p">)</span>
 
@@ -50190,7 +50202,7 @@ Defaults to None.</p>
 
 
 <h2 id="geoai.geoai.normalize_radiometric" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">normalize_radiometric</span><span class="p">(</span><span class="n">subject_image</span><span class="p">,</span> <span class="n">reference_image</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;lirrn&#39;</span><span class="p">,</span> <span class="n">p_n</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">num_quantisation_classes</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">num_sampling_rounds</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">subsample_ratio</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">normalize_radiometric</span><span class="p">(</span><span class="n">subject_image</span><span class="p">,</span> <span class="n">reference_image</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;lirrn&#39;</span><span class="p">,</span> <span class="n">p_n</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">num_quantisation_classes</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">num_sampling_rounds</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">subsample_ratio</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">random_seed</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#geoai.geoai.normalize_radiometric" class="headerlink" title="Permanent link">&para;</a></h2>
 
@@ -50211,13 +50223,15 @@ reference_image : np.ndarray
 method : str, default 'lirrn'
     Normalization method. Currently only 'lirrn' is supported.
 p_n : int, default 1000
-    Number of sample points per quantisation level for LIRRN.
+    Number of sample points per quantisation level for LIRRN (NUM_SAMPLE_POINTS).
 num_quantisation_classes : int, default 3
-    Number of brightness strata for stratified sampling in LIRRN.
+    Number of brightness strata for stratified sampling in LIRRN (NUM_QUANTISATION_CLASSES).
 num_sampling_rounds : int, default 3
-    Number of sampling rounds for robustness in LIRRN.
+    Number of sampling rounds for robustness in LIRRN (NUM_SAMPLING_ROUNDS).
 subsample_ratio : float, default 0.1
-    Fraction of candidates retained for regression in LIRRN.</p>
+    Fraction of candidates retained for regression in LIRRN (SUBSAMPLE_RATIO).
+random_seed : int or None, default None
+    Random seed for reproducible results (RANDOM_SEED).</p>
 <h4 id="geoai.geoai.normalize_radiometric--returns">Returns<a class="headerlink" href="#geoai.geoai.normalize_radiometric--returns" title="Permanent link">&para;</a></h4>
 <p>normalized_image : np.ndarray
     Normalized image with radiometric properties matching the reference.
@@ -50243,14 +50257,7 @@ print(f"RMSE per band: {metrics['rmse']}")</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>geoai/landcover_utils.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">577</span>
-<span class="normal">578</span>
-<span class="normal">579</span>
-<span class="normal">580</span>
-<span class="normal">581</span>
-<span class="normal">582</span>
-<span class="normal">583</span>
-<span class="normal">584</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">584</span>
 <span class="normal">585</span>
 <span class="normal">586</span>
 <span class="normal">587</span>
@@ -50309,14 +50316,26 @@ print(f"RMSE per band: {metrics['rmse']}")</p>
 <span class="normal">640</span>
 <span class="normal">641</span>
 <span class="normal">642</span>
-<span class="normal">643</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">normalize_radiometric</span><span class="p">(</span>
+<span class="normal">643</span>
+<span class="normal">644</span>
+<span class="normal">645</span>
+<span class="normal">646</span>
+<span class="normal">647</span>
+<span class="normal">648</span>
+<span class="normal">649</span>
+<span class="normal">650</span>
+<span class="normal">651</span>
+<span class="normal">652</span>
+<span class="normal">653</span>
+<span class="normal">654</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">normalize_radiometric</span><span class="p">(</span>
     <span class="n">subject_image</span><span class="p">,</span>
     <span class="n">reference_image</span><span class="p">,</span>
     <span class="n">method</span><span class="o">=</span><span class="s1">&#39;lirrn&#39;</span><span class="p">,</span>
     <span class="n">p_n</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
     <span class="n">num_quantisation_classes</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
     <span class="n">num_sampling_rounds</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
-    <span class="n">subsample_ratio</span><span class="o">=</span><span class="mf">0.1</span>
+    <span class="n">subsample_ratio</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+    <span class="n">random_seed</span><span class="o">=</span><span class="kc">None</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Normalize subject image to match reference image radiometrically for improved comparability.</span>
 
@@ -50336,13 +50355,15 @@ print(f"RMSE per band: {metrics['rmse']}")</p>
 <span class="sd">    method : str, default &#39;lirrn&#39;</span>
 <span class="sd">        Normalization method. Currently only &#39;lirrn&#39; is supported.</span>
 <span class="sd">    p_n : int, default 1000</span>
-<span class="sd">        Number of sample points per quantisation level for LIRRN.</span>
+<span class="sd">        Number of sample points per quantisation level for LIRRN (NUM_SAMPLE_POINTS).</span>
 <span class="sd">    num_quantisation_classes : int, default 3</span>
-<span class="sd">        Number of brightness strata for stratified sampling in LIRRN.</span>
+<span class="sd">        Number of brightness strata for stratified sampling in LIRRN (NUM_QUANTISATION_CLASSES).</span>
 <span class="sd">    num_sampling_rounds : int, default 3</span>
-<span class="sd">        Number of sampling rounds for robustness in LIRRN.</span>
+<span class="sd">        Number of sampling rounds for robustness in LIRRN (NUM_SAMPLING_ROUNDS).</span>
 <span class="sd">    subsample_ratio : float, default 0.1</span>
-<span class="sd">        Fraction of candidates retained for regression in LIRRN.</span>
+<span class="sd">        Fraction of candidates retained for regression in LIRRN (SUBSAMPLE_RATIO).</span>
+<span class="sd">    random_seed : int or None, default None</span>
+<span class="sd">        Random seed for reproducible results (RANDOM_SEED).</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -50370,7 +50391,8 @@ print(f"RMSE per band: {metrics['rmse']}")</p>
             <span class="n">p_n</span><span class="p">,</span> <span class="n">subject_image</span><span class="p">,</span> <span class="n">reference_image</span><span class="p">,</span>
             <span class="n">num_quantisation_classes</span><span class="o">=</span><span class="n">num_quantisation_classes</span><span class="p">,</span>
             <span class="n">num_sampling_rounds</span><span class="o">=</span><span class="n">num_sampling_rounds</span><span class="p">,</span>
-            <span class="n">subsample_ratio</span><span class="o">=</span><span class="n">subsample_ratio</span>
+            <span class="n">subsample_ratio</span><span class="o">=</span><span class="n">subsample_ratio</span><span class="p">,</span>
+            <span class="n">random_seed</span><span class="o">=</span><span class="n">random_seed</span>
         <span class="p">)</span>
         <span class="n">metrics</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;rmse&#39;</span><span class="p">:</span> <span class="n">rmse</span><span class="p">,</span> <span class="s1">&#39;r_adj&#39;</span><span class="p">:</span> <span class="n">r_adj</span><span class="p">}</span>
         <span class="k">return</span> <span class="n">norm_img</span><span class="p">,</span> <span class="n">metrics</span>
@@ -58196,7 +58218,7 @@ not saved. Defaults to None.</p>
 
 
 <h2 id="geoai.geoai.sample_selection" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">sample_selection</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">sample_selection</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">,</span> <span class="n">num_sampling_rounds</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span></code>
 
 <a href="#geoai.geoai.sample_selection" class="headerlink" title="Permanent link">&para;</a></h2>
 
@@ -58212,7 +58234,9 @@ a : np.ndarray
 b : np.ndarray
     Flattened subject pixels (masked by quantisation level; 0 = outside).
 id_indices : np.ndarray
-    Random sub-sampling indices.</p>
+    Random sub-sampling indices.
+num_sampling_rounds : int
+    Number of sampling rounds.</p>
 <h4 id="geoai.geoai.sample_selection--returns">Returns<a class="headerlink" href="#geoai.geoai.sample_selection--returns" title="Permanent link">&para;</a></h4>
 <p>sub, ref : np.ndarray   (1-D each)</p>
 
@@ -58252,7 +58276,9 @@ id_indices : np.ndarray
 <span class="normal">469</span>
 <span class="normal">470</span>
 <span class="normal">471</span>
-<span class="normal">472</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">sample_selection</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">):</span>
+<span class="normal">472</span>
+<span class="normal">473</span>
+<span class="normal">474</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">sample_selection</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">,</span> <span class="n">num_sampling_rounds</span><span class="o">=</span><span class="mi">3</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Select representative sample pairs from a single quantisation level.</span>
 
 <span class="sd">    Parameters</span>
@@ -58265,6 +58291,8 @@ id_indices : np.ndarray
 <span class="sd">        Flattened subject pixels (masked by quantisation level; 0 = outside).</span>
 <span class="sd">    id_indices : np.ndarray</span>
 <span class="sd">        Random sub-sampling indices.</span>
+<span class="sd">    num_sampling_rounds : int</span>
+<span class="sd">        Number of sampling rounds.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -58280,7 +58308,7 @@ id_indices : np.ndarray
             <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.0</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.0</span><span class="p">])</span>
         <span class="k">return</span> <span class="n">b1</span><span class="p">[:</span><span class="n">min_len</span><span class="p">],</span> <span class="n">a1</span><span class="p">[:</span><span class="n">min_len</span><span class="p">]</span>
 
-    <span class="n">sub_1</span><span class="p">,</span> <span class="n">ref_1</span> <span class="o">=</span> <span class="n">compute_sample</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">)</span>
+    <span class="n">sub_1</span><span class="p">,</span> <span class="n">ref_1</span> <span class="o">=</span> <span class="n">compute_sample</span><span class="p">(</span><span class="n">p_n</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">id_indices</span><span class="p">,</span> <span class="n">num_sampling_rounds</span><span class="p">)</span>
 
     <span class="c1"># Non-zeros first, then zeros (matches MATLAB behaviour)</span>
     <span class="n">sub</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">sub_1</span><span class="p">[</span><span class="n">sub_1</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">],</span> <span class="n">sub_1</span><span class="p">[</span><span class="n">sub_1</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]])</span>
