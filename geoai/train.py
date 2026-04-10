@@ -1,4 +1,5 @@
 import glob
+import logging
 import math
 import os
 import platform
@@ -18,12 +19,20 @@ from rasterio.windows import Window
 from skimage import measure
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
-from torchvision.models.detection import maskrcnn_resnet50_fpn
+from torchvision.models.detection import (
+    fasterrcnn_mobilenet_v3_large_fpn,
+    fasterrcnn_resnet50_fpn_v2,
+    fcos_resnet50_fpn,
+    maskrcnn_resnet50_fpn,
+    retinanet_resnet50_fpn_v2,
+)
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 from tqdm import tqdm
 
 from .utils import download_model_from_hf, get_device
+
+logger = logging.getLogger(__name__)
 
 # Additional imports for semantic segmentation
 try:
@@ -43,6 +52,138 @@ except ImportError:
     LIGHTLY_TRAIN_AVAILABLE = False
 
 
+<<<<<<< HEAD
+=======
+def _validate_training_paths(
+    images_dir: str,
+    labels_dir: str,
+    output_dir: str,
+    input_format: str = "directory",
+) -> None:
+    """Validate training input paths before starting training.
+
+    Checks that directories/files exist, are the correct type, and are readable.
+    On Windows, retries on PermissionError to handle transient file locks from
+    antivirus or indexing services.
+
+    Args:
+        images_dir: Directory containing training images.
+        labels_dir: Directory containing labels (or path to COCO JSON).
+        output_dir: Directory for saving model outputs.
+        input_format: One of 'directory', 'coco', 'coco_detection', 'yolo'.
+
+    Raises:
+        FileNotFoundError: If a required path does not exist or is the wrong type.
+        PermissionError: If a required path cannot be read.
+    """
+    fmt = input_format.lower()
+
+    # --- images_dir ---
+    if not os.path.exists(images_dir):
+        raise FileNotFoundError(f"Images directory not found: {images_dir}")
+    if not os.path.isdir(images_dir):
+        raise FileNotFoundError(f"Images path is not a directory: {images_dir}")
+    _check_readable(images_dir)
+
+    # --- labels_dir (format-dependent) ---
+    if fmt in ("coco", "coco_detection"):
+        if not os.path.exists(labels_dir):
+            raise FileNotFoundError(f"COCO annotations file not found: {labels_dir}")
+        if not os.path.isfile(labels_dir):
+            raise FileNotFoundError(
+                f"COCO annotations path is not a file: {labels_dir}. "
+                "For COCO format, labels should point to a JSON file "
+                "(e.g., instances.json)."
+            )
+        _check_readable(labels_dir)
+    elif fmt == "yolo":
+        yolo_images = os.path.join(images_dir, "images")
+        yolo_labels = os.path.join(images_dir, "labels")
+        if not os.path.isdir(yolo_images):
+            raise FileNotFoundError(
+                f"YOLO images subdirectory not found: {yolo_images}. "
+                "YOLO format requires 'images/' and 'labels/' subdirectories."
+            )
+        if not os.path.isdir(yolo_labels):
+            raise FileNotFoundError(
+                f"YOLO labels subdirectory not found: {yolo_labels}. "
+                "YOLO format requires 'images/' and 'labels/' subdirectories."
+            )
+        _check_readable(yolo_images)
+        _check_readable(yolo_labels)
+    else:
+        # directory format
+        if not os.path.exists(labels_dir):
+            raise FileNotFoundError(f"Labels directory not found: {labels_dir}")
+        if not os.path.isdir(labels_dir):
+            raise FileNotFoundError(f"Labels path is not a directory: {labels_dir}")
+        _check_readable(labels_dir)
+
+    # --- output_dir ---
+    abs_output_dir = os.path.abspath(output_dir)
+    if os.path.exists(abs_output_dir) and not os.path.isdir(abs_output_dir):
+        raise NotADirectoryError(
+            f"Output path exists and is not a directory: {output_dir}"
+        )
+    try:
+        os.makedirs(abs_output_dir, exist_ok=True)
+    except PermissionError:
+        raise PermissionError(
+            f"Cannot create output directory (permission denied): {output_dir}"
+        )
+    except OSError as e:
+        raise OSError(f"Failed to create output directory '{output_dir}': {e}") from e
+
+
+def _check_readable(path: str, max_retries: int = 3, retry_delay: float = 1.0) -> None:
+    """Verify a path is readable, with retry on Windows for transient locks.
+
+    On Windows, antivirus scanners and file indexing services can briefly lock
+    newly created directories, causing PermissionError on os.listdir().  This
+    helper retries a few times before giving up.
+
+    Args:
+        path: File or directory path to check.
+        max_retries: Number of retry attempts on PermissionError (Windows only).
+        retry_delay: Seconds to wait between retries.
+
+    Raises:
+        PermissionError: If the path is not readable after all retries.
+    """
+    is_dir = os.path.isdir(path)
+    attempts = max_retries if platform.system() == "Windows" else 1
+
+    for attempt in range(attempts):
+        try:
+            if is_dir:
+                os.listdir(path)
+            else:
+                with open(path, "rb") as f:
+                    f.read(1)
+            return
+        except PermissionError:
+            if attempt < attempts - 1:
+                logger.warning(
+                    "Permission denied reading %s (attempt %d/%d), retrying...",
+                    path,
+                    attempt + 1,
+                    attempts,
+                )
+                time.sleep(retry_delay)
+            else:
+                hint = ""
+                if platform.system() == "Windows":
+                    hint = (
+                        " This may be caused by Windows Defender, file indexing, "
+                        "or another process holding a lock. Try: (1) waiting a "
+                        "few seconds and retrying, (2) excluding the directory "
+                        "from antivirus scanning, (3) running QGIS as "
+                        "administrator."
+                    )
+                raise PermissionError(f"Cannot read {path} (permission denied).{hint}")
+
+
+>>>>>>> upstream/main
 def parse_coco_annotations(
     coco_json_path: str, images_dir: str, labels_dir: str
 ) -> Tuple[List[str], List[str]]:
@@ -125,6 +266,176 @@ def parse_yolo_annotations(
 
     return sorted(image_files), sorted(label_files)
 
+<<<<<<< HEAD
+=======
+
+DETECTION_MODELS = {
+    "fasterrcnn_resnet50_fpn_v2",
+    "fasterrcnn_mobilenet_v3_large_fpn",
+    "retinanet_resnet50_fpn_v2",
+    "fcos_resnet50_fpn",
+    "maskrcnn_resnet50_fpn",
+}
+
+
+def model_has_masks(model_name: str) -> bool:
+    """Check whether a detection model produces instance masks.
+
+    Args:
+        model_name (str): Name of the detection model.
+
+    Returns:
+        bool: True if the model outputs instance masks (Mask R-CNN).
+    """
+    return model_name == "maskrcnn_resnet50_fpn"
+
+
+def _adjust_backbone_channels(
+    model: torch.nn.Module, model_name: str, num_channels: int
+) -> None:
+    """Modify the backbone's first conv layer to accept a different number of input channels.
+
+    Args:
+        model: The detection model.
+        model_name: Name used to locate the first conv layer.
+        num_channels: Desired number of input channels.
+    """
+    if num_channels == 3:
+        return
+
+    if num_channels < 3:
+        raise ValueError(f"num_channels must be at least 3, got {num_channels}")
+
+    # Locate first conv layer based on architecture
+    if "mobilenet" in model_name:
+        original_layer = model.backbone.body["0"][0]
+        parent = model.backbone.body["0"]
+        attr = 0
+    else:
+        # ResNet-based (fasterrcnn_resnet50, retinanet, fcos, maskrcnn)
+        original_layer = model.backbone.body.conv1
+        parent = model.backbone.body
+        attr = "conv1"
+
+    new_layer = torch.nn.Conv2d(
+        num_channels,
+        original_layer.out_channels,
+        kernel_size=original_layer.kernel_size,
+        stride=original_layer.stride,
+        padding=original_layer.padding,
+        bias=original_layer.bias is not None,
+    )
+
+    with torch.no_grad():
+        min_ch = min(3, num_channels)
+        new_layer.weight[:, :min_ch, :, :] = original_layer.weight[:, :min_ch, :, :]
+        if num_channels > 3:
+            mean_weight = original_layer.weight.mean(dim=1, keepdim=True)
+            for i in range(3, num_channels):
+                new_layer.weight[:, i : i + 1, :, :] = mean_weight
+        if original_layer.bias is not None:
+            new_layer.bias = original_layer.bias
+
+    if isinstance(attr, int):
+        parent[attr] = new_layer
+    else:
+        setattr(parent, attr, new_layer)
+
+    # Also update transform normalization stats
+    transform = model.transform
+    rgb_mean = [0.485, 0.456, 0.406]
+    rgb_std = [0.229, 0.224, 0.225]
+    mean_of_means = sum(rgb_mean) / len(rgb_mean)
+    mean_of_stds = sum(rgb_std) / len(rgb_std)
+    transform.image_mean = rgb_mean + [mean_of_means] * (num_channels - 3)
+    transform.image_std = rgb_std + [mean_of_stds] * (num_channels - 3)
+
+
+def get_detection_model(
+    model_name: str = "fasterrcnn_resnet50_fpn_v2",
+    num_classes: int = 2,
+    num_channels: int = 3,
+    pretrained: bool = True,
+) -> torch.nn.Module:
+    """Create a detection model from the supported torchvision architectures.
+
+    Supports Faster R-CNN (ResNet-50 v2, MobileNet v3), RetinaNet, FCOS,
+    and Mask R-CNN. The classification head is replaced to match
+    ``num_classes`` and the backbone is adjusted for ``num_channels``.
+
+    Args:
+        model_name (str): One of the names in :data:`DETECTION_MODELS`.
+            Defaults to ``"fasterrcnn_resnet50_fpn_v2"``.
+        num_classes (int): Number of output classes including background.
+        num_channels (int): Number of input image channels.
+        pretrained (bool): Whether to load pretrained weights.
+
+    Returns:
+        torch.nn.Module: The detection model with adjusted heads.
+
+    Raises:
+        ValueError: If ``model_name`` is not in :data:`DETECTION_MODELS`.
+    """
+    if model_name not in DETECTION_MODELS:
+        raise ValueError(
+            f"Unknown model '{model_name}'. " f"Supported: {sorted(DETECTION_MODELS)}"
+        )
+
+    # Mask R-CNN: delegate to existing function
+    if model_name == "maskrcnn_resnet50_fpn":
+        return get_instance_segmentation_model(num_classes, num_channels, pretrained)
+
+    # Build model constructors
+    constructors = {
+        "fasterrcnn_resnet50_fpn_v2": (
+            fasterrcnn_resnet50_fpn_v2,
+            "FasterRCNN_ResNet50_FPN_V2_Weights",
+        ),
+        "fasterrcnn_mobilenet_v3_large_fpn": (
+            fasterrcnn_mobilenet_v3_large_fpn,
+            "FasterRCNN_MobileNet_V3_Large_FPN_Weights",
+        ),
+        "retinanet_resnet50_fpn_v2": (
+            retinanet_resnet50_fpn_v2,
+            "RetinaNet_ResNet50_FPN_V2_Weights",
+        ),
+        "fcos_resnet50_fpn": (
+            fcos_resnet50_fpn,
+            "FCOS_ResNet50_FPN_Weights",
+        ),
+    }
+
+    constructor, weights_name = constructors[model_name]
+    weights = (
+        getattr(torchvision.models.detection, weights_name).DEFAULT
+        if pretrained
+        else None
+    )
+    model = constructor(weights=weights)
+
+    # Replace classification head for the target num_classes
+    if model_name.startswith("fasterrcnn"):
+        in_features = model.roi_heads.box_predictor.cls_score.in_features
+        model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+    elif model_name in ("retinanet_resnet50_fpn_v2", "fcos_resnet50_fpn"):
+        # Replace cls_logits layer preserving spatial kernel and anchor count
+        old_cls = model.head.classification_head.cls_logits
+        num_anchors = old_cls.out_channels // model.head.classification_head.num_classes
+        model.head.classification_head.num_classes = num_classes
+        model.head.classification_head.cls_logits = torch.nn.Conv2d(
+            old_cls.in_channels,
+            num_anchors * num_classes,
+            kernel_size=old_cls.kernel_size,
+            stride=old_cls.stride,
+            padding=old_cls.padding,
+        )
+
+    # Adjust backbone for non-RGB input
+    _adjust_backbone_channels(model, model_name, num_channels)
+
+    return model
+
+>>>>>>> upstream/main
 
 def get_instance_segmentation_model(
     num_classes: int = 2, num_channels: int = 3, pretrained: bool = True
@@ -229,6 +540,8 @@ class ObjectDetectionDataset(Dataset):
         label_paths: List[str],
         transforms: Optional[Callable] = None,
         num_channels: Optional[int] = None,
+        instance_labels: bool = False,
+        multiclass: bool = False,
     ) -> None:
         """
         Initialize dataset.
@@ -239,10 +552,37 @@ class ObjectDetectionDataset(Dataset):
             transforms (callable, optional): Transformations to apply to images and masks.
             num_channels (int, optional): Number of channels to use from images. If None,
                 auto-detected from the first image.
+            instance_labels (bool): If True, treat label mask pixel values as
+                pre-assigned instance IDs instead of running connected-component
+                labeling.  Use this when label masks already encode unique
+                integers per object (e.g., Fields of The World dataset).
+                Defaults to False.
+            multiclass (bool): If True, read class labels from the label
+                mask pixel values instead of assigning every instance to
+                class ``1``. Connected-component labeling is run *per class
+                value* so that adjacent regions of different classes are
+                not merged into a single instance. Use this when training
+                a multi-class Mask R-CNN with ``num_classes > 2`` where
+                pixel values encode class IDs (1..N, with 0 reserved for
+                background). Cannot be combined with ``instance_labels``
+                (which uses the same raster to encode instance IDs).
+                Defaults to False for backward compatibility with binary
+                training.
         """
+        if multiclass and instance_labels:
+            raise ValueError(
+                "multiclass=True is incompatible with instance_labels=True: "
+                "when label pixel values encode pre-assigned instance IDs, "
+                "there is no reliable way to also recover class IDs from "
+                "the same raster. Use separate class and instance rasters, "
+                "or disable one of the options."
+            )
+
         self.image_paths = image_paths
         self.label_paths = label_paths
         self.transforms = transforms
+        self.instance_labels = instance_labels
+        self.multiclass = multiclass
 
         # Auto-detect the number of channels if not specified
         if num_channels is None:
@@ -283,21 +623,49 @@ class ObjectDetectionDataset(Dataset):
         # Load label mask
         with rasterio.open(self.label_paths[idx]) as src:
             label_mask = src.read(1)
+
+        # Build an iterable of (labeled_mask, instance_id, class_label)
+        # triples so the rest of the loop can stay shape-agnostic across
+        # the three extraction modes (instance_labels, multiclass, binary).
+        if self.instance_labels:
+            # Use pre-assigned instance IDs directly (e.g., FTW dataset).
+            # Always single-class in this mode (multiclass+instance_labels
+            # combination is rejected in __init__).
+            unique_ids = np.unique(label_mask)
+            unique_ids = unique_ids[unique_ids > 0]
+            instance_sources = [(label_mask, int(i), 1) for i in unique_ids]
+        elif self.multiclass:
+            # Run connected components *per class* so that touching regions
+            # of different classes are not merged into a single instance.
+            class_values = np.unique(label_mask)
+            class_values = class_values[class_values > 0]
+            instance_sources = []
+            for cls in class_values:
+                cls_int = int(cls)
+                cls_mask = (label_mask == cls).astype(np.uint8)
+                cls_labeled, n_cls = measure.label(
+                    cls_mask, return_num=True, connectivity=2
+                )
+                for inst_id in range(1, n_cls + 1):
+                    instance_sources.append((cls_labeled, inst_id, cls_int))
+        else:
+            # Binary foreground: all instances share class label 1.
             binary_mask = (label_mask > 0).astype(np.uint8)
+            labeled_mask, num_instances = measure.label(
+                binary_mask, return_num=True, connectivity=2
+            )
+            instance_sources = [
+                (labeled_mask, i, 1) for i in range(1, num_instances + 1)
+            ]
 
-        # Find all building instances using connected components
-        labeled_mask, num_instances = measure.label(
-            binary_mask, return_num=True, connectivity=2
-        )
-
-        # Create list to hold masks for each building instance
+        # Create list to hold masks for each object instance
         masks = []
         boxes = []
         labels = []
 
-        for i in range(1, num_instances + 1):
+        for src_mask, i, class_label in instance_sources:
             # Create mask for this instance
-            instance_mask = (labeled_mask == i).astype(np.uint8)
+            instance_mask = (src_mask == i).astype(np.uint8)
 
             # Calculate area and filter out tiny instances (noise)
             area = instance_mask.sum()
@@ -321,12 +689,12 @@ class ObjectDetectionDataset(Dataset):
             # Add small padding to ensure the mask is within the box
             xmin = max(0, xmin - 1)
             ymin = max(0, ymin - 1)
-            xmax = min(binary_mask.shape[1] - 1, xmax + 1)
-            ymax = min(binary_mask.shape[0] - 1, ymax + 1)
+            xmax = min(label_mask.shape[1] - 1, xmax + 1)
+            ymax = min(label_mask.shape[0] - 1, ymax + 1)
 
             boxes.append([xmin, ymin, xmax, ymax])
             masks.append(instance_mask)
-            labels.append(1)  # 1 for building class
+            labels.append(class_label)
 
         # Handle case with no valid instances
         if len(boxes) == 0:
@@ -335,7 +703,7 @@ class ObjectDetectionDataset(Dataset):
                 "boxes": torch.zeros((0, 4), dtype=torch.float32),
                 "labels": torch.zeros((0), dtype=torch.int64),
                 "masks": torch.zeros(
-                    (0, binary_mask.shape[0], binary_mask.shape[1]), dtype=torch.uint8
+                    (0, label_mask.shape[0], label_mask.shape[1]), dtype=torch.uint8
                 ),
                 "image_id": torch.tensor([idx]),
                 "area": torch.zeros((0), dtype=torch.float32),
@@ -361,6 +729,321 @@ class ObjectDetectionDataset(Dataset):
             }
 
         # Apply transforms if specified
+        if self.transforms is not None:
+            image, target = self.transforms(image, target)
+
+        return image, target
+
+
+class COCODetectionDataset(Dataset):
+    """Dataset for multi-class object detection from COCO-format annotations.
+
+    Reads images (JPEG/PNG/GeoTIFF) and loads instance masks and class labels
+    from a COCO-format JSON annotation file. Supports multi-class labels
+    unlike ObjectDetectionDataset which only produces binary masks.
+
+    Args:
+        coco_json_path (str): Path to COCO annotations JSON file.
+        images_dir (str): Directory containing image files.
+        image_ids (list, optional): Subset of image IDs to use. If None, uses all.
+        category_mapping (dict, optional): Mapping from COCO category_id to
+            contiguous class labels (1-indexed, 0 is background). If None,
+            auto-generated from the annotations file.
+        transforms (callable, optional): Transforms to apply to images and targets.
+        num_channels (int, optional): Number of image channels. Auto-detected if None.
+        min_area (int): Minimum instance area in pixels. Defaults to 10.
+    """
+
+    def __init__(
+        self,
+        coco_json_path: str,
+        images_dir: str,
+        image_ids: Optional[List[int]] = None,
+        category_mapping: Optional[Dict[int, int]] = None,
+        transforms: Optional[Callable] = None,
+        num_channels: Optional[int] = None,
+        min_area: int = 10,
+        compute_masks: bool = True,
+    ) -> None:
+        """Initialize COCO detection dataset.
+
+        Args:
+            coco_json_path (str): Path to COCO annotations JSON file.
+            images_dir (str): Directory containing image files.
+            image_ids (list, optional): Subset of image IDs to use. If None,
+                uses all images that have annotations.
+            category_mapping (dict, optional): Mapping from COCO category_id to
+                contiguous class labels (1-indexed). If None, auto-generated.
+            transforms (callable, optional): Transforms to apply.
+            num_channels (int, optional): Number of channels. Auto-detected if None.
+            min_area (int): Minimum instance area in pixels. Defaults to 10.
+            compute_masks (bool): Whether to decode instance segmentation
+                masks. Set to False for bbox-only detection models to speed
+                up data loading. Defaults to True.
+        """
+        import json
+
+        self.images_dir = images_dir
+        self.transforms = transforms
+        self.min_area = min_area
+        self.compute_masks = compute_masks
+
+        # Load COCO annotations
+        with open(coco_json_path, "r") as f:
+            coco_data = json.load(f)
+
+        # Build category mapping
+        categories = coco_data.get("categories", [])
+        if category_mapping is not None:
+            self.category_mapping = category_mapping
+        else:
+            # Auto-generate contiguous mapping: category_id -> 1, 2, 3, ...
+            sorted_cats = sorted(categories, key=lambda c: c["id"])
+            self.category_mapping = {
+                cat["id"]: idx + 1 for idx, cat in enumerate(sorted_cats)
+            }
+
+        self.class_names = ["background"] + [
+            cat["name"] for cat in sorted(categories, key=lambda c: c["id"])
+        ]
+        self.num_classes = len(self.class_names)
+
+        # Build image info lookup
+        image_info_map = {img["id"]: img for img in coco_data["images"]}
+
+        # Build annotations grouped by image_id
+        annotations_by_image = {}
+        for ann in coco_data.get("annotations", []):
+            img_id = ann["image_id"]
+            if img_id not in annotations_by_image:
+                annotations_by_image[img_id] = []
+            annotations_by_image[img_id].append(ann)
+
+        # Filter to requested image_ids or all images with annotations.
+        # By default, only images that have at least one annotation are
+        # included.  Pass explicit image_ids to include negatives.
+        if image_ids is not None:
+            valid_ids = [img_id for img_id in image_ids if img_id in image_info_map]
+        else:
+            valid_ids = [
+                img_id for img_id in image_info_map if img_id in annotations_by_image
+            ]
+
+        # Build final lists, filtering out images whose files don't exist
+        self.image_info = []
+        self.annotations = []
+        for img_id in valid_ids:
+            info = image_info_map[img_id]
+            img_path = os.path.join(images_dir, info["file_name"])
+            if os.path.exists(img_path):
+                self.image_info.append(info)
+                self.annotations.append(annotations_by_image.get(img_id, []))
+
+        # Auto-detect number of channels from first image
+        if num_channels is not None:
+            self.num_channels = num_channels
+        elif len(self.image_info) > 0:
+            first_path = os.path.join(images_dir, self.image_info[0]["file_name"])
+            if first_path.lower().endswith((".tif", ".tiff")):
+                with rasterio.open(first_path) as src:
+                    self.num_channels = src.count
+            else:
+                img = Image.open(first_path)
+                self.num_channels = len(img.getbands())
+        else:
+            self.num_channels = 3
+
+    def __len__(self) -> int:
+        """Return the number of images in the dataset."""
+        return len(self.image_info)
+
+    def _polygon_to_mask(
+        self, segmentation: List[List[float]], height: int, width: int
+    ) -> np.ndarray:
+        """Convert COCO polygon segmentation to binary mask.
+
+        Args:
+            segmentation (list): List of polygon coordinate lists.
+            height (int): Image height.
+            width (int): Image width.
+
+        Returns:
+            np.ndarray: Binary mask of shape (height, width).
+        """
+        from skimage.draw import polygon as draw_polygon
+
+        mask = np.zeros((height, width), dtype=np.uint8)
+        for poly_coords in segmentation:
+            # COCO format: [x1, y1, x2, y2, ..., xn, yn]
+            coords = np.array(poly_coords).reshape(-1, 2)
+            rr, cc = draw_polygon(coords[:, 1], coords[:, 0], shape=(height, width))
+            mask[rr, cc] = 1
+        return mask
+
+    def _rle_to_mask(self, rle: Dict, height: int, width: int) -> np.ndarray:
+        """Convert COCO RLE segmentation to binary mask.
+
+        Args:
+            rle (dict): RLE encoded mask with 'counts' and 'size' keys.
+            height (int): Image height.
+            width (int): Image width.
+
+        Returns:
+            np.ndarray: Binary mask of shape (height, width).
+        """
+        try:
+            from pycocotools import mask as mask_utils
+
+            if isinstance(rle["counts"], list):
+                # Uncompressed RLE
+                rle_obj = mask_utils.frPyObjects(rle, height, width)
+                return mask_utils.decode(rle_obj).astype(np.uint8)
+            else:
+                return mask_utils.decode(rle).astype(np.uint8)
+        except ImportError:
+            # Fallback: manual RLE decode
+            counts = rle["counts"]
+            if isinstance(counts, str):
+                # Compressed RLE - need pycocotools for this
+                raise ImportError(
+                    "pycocotools is required for compressed RLE masks. "
+                    "Install with: pip install pycocotools"
+                )
+            # Uncompressed RLE: alternating 0-runs and 1-runs
+            mask = np.zeros(height * width, dtype=np.uint8)
+            pos = 0
+            for i, count in enumerate(counts):
+                if i % 2 == 1:  # Odd indices are foreground runs
+                    mask[pos : pos + count] = 1
+                pos += count
+            return mask.reshape((height, width), order="F")
+
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        """Get a single image and its annotations.
+
+        Args:
+            idx (int): Index of the image to retrieve.
+
+        Returns:
+            Tuple of (image_tensor, target_dict) where target_dict contains
+            boxes, labels, masks, image_id, area, and iscrowd fields.
+        """
+        info = self.image_info[idx]
+        img_path = os.path.join(self.images_dir, info["file_name"])
+        height = info["height"]
+        width = info["width"]
+
+        # Load image
+        if img_path.lower().endswith((".tif", ".tiff")):
+            with rasterio.open(img_path) as src:
+                image = src.read().astype(np.float32)
+        else:
+            img = Image.open(img_path).convert("RGB")
+            image = np.array(img, dtype=np.float32).transpose(2, 0, 1)
+
+        # Normalize to [0, 1]
+        if image.max() > 1.0:
+            image = image / 255.0
+
+        # Handle channel count
+        if image.shape[0] > self.num_channels:
+            image = image[: self.num_channels]
+        elif image.shape[0] < self.num_channels:
+            padded = np.zeros(
+                (self.num_channels, image.shape[1], image.shape[2]),
+                dtype=np.float32,
+            )
+            padded[: image.shape[0]] = image
+            image = padded
+
+        image = torch.as_tensor(image, dtype=torch.float32)
+
+        # Process annotations
+        anns = self.annotations[idx]
+        boxes = []
+        masks = []
+        labels = []
+
+        for ann in anns:
+            if self.compute_masks:
+                # Decode segmentation mask
+                seg = ann.get("segmentation")
+                if seg is None:
+                    continue
+
+                if isinstance(seg, dict):
+                    mask = self._rle_to_mask(seg, height, width)
+                elif isinstance(seg, list) and len(seg) > 0:
+                    mask = self._polygon_to_mask(seg, height, width)
+                else:
+                    continue
+
+                # Filter by area
+                area_val = mask.sum()
+                if area_val < self.min_area:
+                    continue
+
+                # Get bounding box from annotation or compute from mask
+                if "bbox" in ann:
+                    x, y, w, h = ann["bbox"]
+                    xmin, ymin = float(x), float(y)
+                    xmax, ymax = float(x + w), float(y + h)
+                else:
+                    pos = np.where(mask)
+                    if len(pos[0]) == 0:
+                        continue
+                    ymin, ymax = int(np.min(pos[0])), int(np.max(pos[0]))
+                    xmin, xmax = int(np.min(pos[1])), int(np.max(pos[1]))
+
+                if xmax <= xmin or ymax <= ymin:
+                    continue
+
+                boxes.append([xmin, ymin, xmax, ymax])
+                masks.append(mask)
+                labels.append(self.category_mapping.get(ann["category_id"], 1))
+            else:
+                # Bbox-only mode: skip expensive mask decoding
+                if "bbox" not in ann:
+                    continue
+                x, y, w, h = ann["bbox"]
+                if w < 1 or h < 1:
+                    continue
+                area_val = ann.get("area", w * h)
+                if area_val < self.min_area:
+                    continue
+                xmin, ymin = float(x), float(y)
+                xmax, ymax = float(x + w), float(y + h)
+                boxes.append([xmin, ymin, xmax, ymax])
+                labels.append(self.category_mapping.get(ann["category_id"], 1))
+
+        # Use the actual COCO image id (not the dataset index)
+        coco_image_id = info["id"]
+
+        # Handle case with no valid instances
+        if len(boxes) == 0:
+            target = {
+                "boxes": torch.zeros((0, 4), dtype=torch.float32),
+                "labels": torch.zeros((0,), dtype=torch.int64),
+                "image_id": torch.tensor([coco_image_id]),
+                "area": torch.zeros((0,), dtype=torch.float32),
+                "iscrowd": torch.zeros((0,), dtype=torch.int64),
+            }
+            if self.compute_masks:
+                target["masks"] = torch.zeros((0, height, width), dtype=torch.uint8)
+        else:
+            boxes_t = torch.as_tensor(boxes, dtype=torch.float32)
+            labels_t = torch.as_tensor(labels, dtype=torch.int64)
+            area = (boxes_t[:, 3] - boxes_t[:, 1]) * (boxes_t[:, 2] - boxes_t[:, 0])
+            target = {
+                "boxes": boxes_t,
+                "labels": labels_t,
+                "image_id": torch.tensor([coco_image_id]),
+                "area": area,
+                "iscrowd": torch.zeros_like(labels_t),
+            }
+            if self.compute_masks:
+                target["masks"] = torch.as_tensor(np.array(masks), dtype=torch.uint8)
+
         if self.transforms is not None:
             image, target = self.transforms(image, target)
 
@@ -439,6 +1122,35 @@ class RandomHorizontalFlip:
         return image, target
 
 
+class RandomVerticalFlip:
+    """Random vertical flip transform for detection data."""
+
+    def __init__(self, prob: float = 0.5) -> None:
+        """Initialize random vertical flip.
+
+        Args:
+            prob (float): Probability of applying the flip.
+        """
+        self.prob = prob
+
+    def __call__(
+        self, image: torch.Tensor, target: Dict[str, torch.Tensor]
+    ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        if random.random() < self.prob:
+            image = torch.flip(image, dims=[1])  # Flip along height dimension
+
+            if "masks" in target and len(target["masks"]) > 0:
+                target["masks"] = torch.flip(target["masks"], dims=[1])
+
+            if "boxes" in target and len(target["boxes"]) > 0:
+                boxes = target["boxes"]
+                height = image.shape[1]
+                boxes[:, 1], boxes[:, 3] = height - boxes[:, 3], height - boxes[:, 1]
+                target["boxes"] = boxes
+
+        return image, target
+
+
 def get_transform(train: bool) -> torchvision.transforms.Compose:
     """
     Get transforms for data augmentation.
@@ -454,6 +1166,7 @@ def get_transform(train: bool) -> torchvision.transforms.Compose:
 
     if train:
         transforms.append(RandomHorizontalFlip(0.5))
+        transforms.append(RandomVerticalFlip(0.5))
 
     return Compose(transforms)
 
@@ -499,6 +1212,7 @@ def train_one_epoch(
     """
     model.train()
     total_loss = 0
+    num_batches = 0
 
     start_time = time.time()
 
@@ -511,30 +1225,44 @@ def train_one_epoch(
         loss_dict = model(images, targets)
         losses = sum(loss for loss in loss_dict.values())
 
+        # Skip batches with NaN/Inf loss to prevent gradient corruption
+        if not torch.isfinite(losses):
+            optimizer.zero_grad()
+            continue
+
         # Backward pass
         optimizer.zero_grad()
         losses.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
 
         # Track loss
         total_loss += losses.item()
+        num_batches += 1
 
         # Print progress
         if i % print_freq == 0:
             elapsed_time = time.time() - start_time
             if verbose:
+<<<<<<< HEAD
                 print(
+=======
+                logger.info(
+>>>>>>> upstream/main
                     f"Epoch: {epoch + 1}, Batch: {i + 1}/{len(data_loader)}, Loss: {losses.item():.4f}, Time: {elapsed_time:.2f}s"
                 )
             start_time = time.time()
 
-    # Calculate average loss
-    avg_loss = total_loss / len(data_loader)
+    # Calculate average loss (only over non-skipped batches)
+    avg_loss = total_loss / max(num_batches, 1)
     return avg_loss
 
 
 def evaluate(
-    model: torch.nn.Module, data_loader: DataLoader, device: torch.device
+    model: torch.nn.Module,
+    data_loader: DataLoader,
+    device: torch.device,
+    use_mask_iou: bool = True,
 ) -> Dict[str, float]:
     """
     Evaluate the model on the validation set.
@@ -543,6 +1271,9 @@ def evaluate(
         model (torch.nn.Module): The model to evaluate.
         data_loader (torch.utils.data.DataLoader): DataLoader for validation data.
         device (torch.device): Device to evaluate on.
+        use_mask_iou (bool): If True, compute IoU from instance masks
+            (requires Mask R-CNN). If False, compute IoU from bounding
+            boxes. Defaults to True.
 
     Returns:
         dict: Evaluation metrics including loss and IoU.
@@ -551,6 +1282,7 @@ def evaluate(
 
     # Initialize metrics
     total_loss = 0
+    num_loss_batches = 0
     iou_scores = []
 
     with torch.no_grad():
@@ -559,53 +1291,78 @@ def evaluate(
             images = list(image.to(device) for image in images)
             targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
-            # During evaluation, Mask R-CNN directly returns predictions, not losses
-            # So we'll only get loss when we provide targets explicitly
+            # Mask R-CNN only returns losses in train mode.  We
+            # temporarily enable training-mode forward while keeping
+            # BatchNorm and Dropout frozen so running stats and
+            # stochastic layers are not affected by validation data.
             if len(targets) > 0:
                 try:
-                    # Try to get loss dict (this works in some implementations)
+                    # Freeze BN/Dropout before switching to train mode
+                    for mod in model.modules():
+                        if isinstance(mod, (torch.nn.BatchNorm2d, torch.nn.Dropout)):
+                            mod.eval()
+                    model.train()
                     loss_dict = model(images, targets)
+                    model.eval()
                     if isinstance(loss_dict, dict):
                         losses = sum(loss for loss in loss_dict.values())
-                        total_loss += losses.item()
-                except Exception as e:
-                    print(f"Warning: Could not compute loss during evaluation: {e}")
-                    # If we can't compute loss, we'll just focus on IoU
-                    pass
+                        if torch.isfinite(losses):
+                            total_loss += losses.item()
+                            num_loss_batches += 1
+                except (RuntimeError, ValueError) as e:
+                    import warnings
 
-            # Get predictions
+                    warnings.warn(
+                        f"Could not compute val loss for a batch: {e}",
+                        stacklevel=2,
+                    )
+                    model.eval()
+
+            # Get predictions (model must be in eval mode)
             outputs = model(images)
 
             # Calculate IoU for each image
             for i, output in enumerate(outputs):
-                if len(output["masks"]) == 0 or len(targets[i]["masks"]) == 0:
-                    continue
+                if use_mask_iou:
+                    # Mask-based IoU (Mask R-CNN)
+                    if (
+                        "masks" not in output
+                        or len(output["masks"]) == 0
+                        or "masks" not in targets[i]
+                        or len(targets[i]["masks"]) == 0
+                    ):
+                        continue
 
-                # Convert predicted masks to binary (threshold at 0.5)
-                pred_masks = (output["masks"].squeeze(1) > 0.5).float()
+                    pred_masks = (output["masks"].squeeze(1) > 0.5).float()
+                    pred_combined = (
+                        torch.max(pred_masks, dim=0)[0]
+                        if pred_masks.shape[0] > 0
+                        else torch.zeros_like(targets[i]["masks"][0])
+                    )
+                    target_combined = (
+                        torch.max(targets[i]["masks"], dim=0)[0]
+                        if targets[i]["masks"].shape[0] > 0
+                        else torch.zeros_like(pred_combined)
+                    )
 
-                # Combine all instance masks into a single binary mask
-                pred_combined = (
-                    torch.max(pred_masks, dim=0)[0]
-                    if pred_masks.shape[0] > 0
-                    else torch.zeros_like(targets[i]["masks"][0])
-                )
-                target_combined = (
-                    torch.max(targets[i]["masks"], dim=0)[0]
-                    if targets[i]["masks"].shape[0] > 0
-                    else torch.zeros_like(pred_combined)
-                )
+                    intersection = (pred_combined * target_combined).sum().item()
+                    union = ((pred_combined + target_combined) > 0).sum().item()
+                    if union > 0:
+                        iou_scores.append(intersection / union)
+                else:
+                    # Box-based IoU (Faster R-CNN, RetinaNet, FCOS)
+                    pred_boxes = output["boxes"]
+                    target_boxes = targets[i]["boxes"]
+                    if len(pred_boxes) == 0 or len(target_boxes) == 0:
+                        continue
 
-                # Calculate IoU
-                intersection = (pred_combined * target_combined).sum().item()
-                union = ((pred_combined + target_combined) > 0).sum().item()
-
-                if union > 0:
-                    iou = intersection / union
-                    iou_scores.append(iou)
+                    iou_matrix = torchvision.ops.box_iou(pred_boxes, target_boxes)
+                    # Best IoU for each ground truth box
+                    best_ious = iou_matrix.max(dim=0)[0]
+                    iou_scores.append(best_ious.mean().item())
 
     # Calculate metrics
-    avg_loss = total_loss / len(data_loader) if total_loss > 0 else float("inf")
+    avg_loss = total_loss / num_loss_batches if num_loss_batches > 0 else float("inf")
     avg_iou = sum(iou_scores) / len(iou_scores) if iou_scores else 0
 
     return {"loss": avg_loss, "IoU": avg_iou}
@@ -710,6 +1467,7 @@ def train_MaskRCNN_model(
     output_dir: str,
     input_format: str = "directory",
     num_channels: int = 3,
+    num_classes: int = 2,
     model: Optional[torch.nn.Module] = None,
     pretrained: bool = True,
     pretrained_model_path: Optional[str] = None,
@@ -724,6 +1482,9 @@ def train_MaskRCNN_model(
     device: Optional[torch.device] = None,
     num_workers: Optional[int] = None,
     verbose: bool = True,
+    model_name: str = "maskrcnn_resnet50_fpn",
+    instance_labels: bool = False,
+    multiclass: bool = False,
 ) -> torch.nn.Module:
     """Train and evaluate Mask R-CNN model for instance segmentation.
 
@@ -734,6 +1495,7 @@ def train_MaskRCNN_model(
     Args:
         images_dir (str): Directory containing image GeoTIFF files (for 'directory' format),
             or root directory containing images/ subdirectory (for 'yolo' format),
+<<<<<<< HEAD
             or directory containing images (for 'coco' format).
         labels_dir (str): Directory containing label GeoTIFF files (for 'directory' format),
             or path to COCO annotations JSON file (for 'coco' format),
@@ -742,9 +1504,28 @@ def train_MaskRCNN_model(
         input_format (str): Input data format - 'directory' (default), 'coco', or 'yolo'.
             - 'directory': Standard directory structure with separate images_dir and labels_dir
             - 'coco': COCO JSON format (labels_dir should be path to instances.json)
+=======
+            or directory containing images (for 'coco' and 'coco_detection' formats).
+        labels_dir (str): Directory containing label GeoTIFF files (for 'directory' format),
+            or path to COCO annotations JSON file (for 'coco' and 'coco_detection' formats),
+            or not used (for 'yolo' format - labels are in images_dir/labels/).
+        output_dir (str): Directory to save model checkpoints and results.
+        input_format (str): Input data format - 'directory' (default), 'coco',
+            'coco_detection', or 'yolo'.
+            - 'directory': Standard directory structure with separate images_dir and labels_dir
+            - 'coco': COCO JSON format with pre-rendered label TIFFs
+            - 'coco_detection': COCO JSON with direct annotation parsing for multi-class
+              detection. Automatically sets num_classes from annotations if num_classes is
+              2 (default). labels_dir should be the path to the COCO annotations JSON file.
+>>>>>>> upstream/main
             - 'yolo': YOLO format (images_dir is root with images/ and labels/ subdirectories)
         num_channels (int, optional): Number of input channels. If None, auto-detected.
             Defaults to 3.
+        num_classes (int, optional): Number of output classes including background.
+            For binary detection (e.g., building vs background), use 2.
+            For multi-class detection, use N+1 where N is the number of object
+            classes. For 'coco_detection' format, this is auto-detected from
+            annotations if left at default (2). Defaults to 2.
         model (torch.nn.Module, optional): Predefined model. If None, a new model is created.
         pretrained (bool): Whether to use pretrained backbone. This is ignored if
             pretrained_model_path is provided. Defaults to True.
@@ -761,8 +1542,24 @@ def train_MaskRCNN_model(
             will try to load optimizer and scheduler states as well. Defaults to False.
         print_freq (int): Frequency of printing training progress. Defaults to 10.
         device (torch.device): Device to train on. If None, uses CUDA if available.
-        num_workers (int): Number of workers for data loading. If None, uses 0 on macOS and Windows, 8 otherwise.
+        num_workers (int): Number of workers for data loading. If None, uses 0 on
+            macOS and Windows, 8 otherwise.
         verbose (bool): If True, prints detailed training progress. Defaults to True.
+        model_name (str): Name of the model architecture. Defaults to
+            "maskrcnn_resnet50_fpn".
+        instance_labels (bool): If True, treat label mask pixel values as
+            pre-assigned instance IDs instead of running connected-component
+            labeling. Use this when label masks already encode unique integers
+            per object (e.g., Fields of The World dataset). Defaults to False.
+        multiclass (bool): If True (and ``input_format='directory'``), read
+            per-instance class IDs from the label mask pixel values by
+            running connected-component labeling *per class value*. Use
+            this with ``num_classes > 2`` for multi-class training where
+            pixel values encode class IDs (1..N, with 0 reserved for
+            background). When ``num_classes > 2`` and this is left False
+            (directory input format, no ``instance_labels``), a warning is
+            emitted because every target would silently collapse to class 1.
+            Defaults to False. Cannot be combined with ``instance_labels=True``.
     Returns:
         None: Model weights are saved to output_dir.
 
@@ -786,8 +1583,9 @@ def train_MaskRCNN_model(
     # Get device
     if device is None:
         device = get_device()
-    print(f"Using device: {device}")
+    logger.info(f"Using device: {device}")
 
+<<<<<<< HEAD
     # Get all image and label files based on input format
     if input_format.lower() == "coco":
         # Parse COCO format annotations
@@ -842,23 +1640,191 @@ def train_MaskRCNN_model(
                 if os.path.exists(os.path.join(labels_dir, b))
             ]
             print(f"Using {len(image_files)} matching files")
+=======
+    # Validate input paths before proceeding
+    _validate_training_paths(images_dir, labels_dir, output_dir, input_format)
 
-    print(f"Found {len(image_files)} image files and {len(label_files)} label files")
+    # Get all image and label files based on input format
+    use_coco_detection = input_format.lower() == "coco_detection"
+>>>>>>> upstream/main
 
+    if use_coco_detection:
+        # COCO detection format: read annotations directly from COCO JSON
+        if verbose:
+            logger.info(f"Loading COCO detection annotations from {labels_dir}")
+
+<<<<<<< HEAD
     # Split data into train and validation sets
     train_imgs, val_imgs, train_labels, val_labels = train_test_split(
         image_files, label_files, test_size=val_split, random_state=seed
     )
+=======
+        # Create a full dataset to determine image IDs, then split
+        _needs_masks = model_has_masks(model_name)
+        full_dataset = COCODetectionDataset(
+            coco_json_path=labels_dir,
+            images_dir=images_dir,
+            transforms=None,
+            num_channels=num_channels,
+            min_area=10,
+            compute_masks=_needs_masks,
+        )
 
-    print(f"Training on {len(train_imgs)} images, validating on {len(val_imgs)} images")
+        # Auto-detect num_classes from annotations when not explicitly set.
+        # We check for the default (2) AND that the dataset has more classes,
+        # so explicitly passing num_classes=2 for a binary COCO dataset still
+        # works (the dataset won't have more than 2 classes in that case).
+        detected = full_dataset.num_classes
+        if num_classes == 2 and detected > 2:
+            num_classes = detected
+            if verbose:
+                logger.info(
+                    f"Auto-detected {num_classes} classes "
+                    f"(including background): {full_dataset.class_names}"
+                )
+>>>>>>> upstream/main
 
-    # Create datasets
-    train_dataset = ObjectDetectionDataset(
-        train_imgs, train_labels, transforms=get_transform(train=True)
-    )
-    val_dataset = ObjectDetectionDataset(
-        val_imgs, val_labels, transforms=get_transform(train=False)
-    )
+        # Split image indices into train and validation
+        all_indices = list(range(len(full_dataset)))
+        train_indices, val_indices = train_test_split(
+            all_indices, test_size=val_split, random_state=seed
+        )
+
+        # Get image IDs for each split
+        train_image_ids = [full_dataset.image_info[i]["id"] for i in train_indices]
+        val_image_ids = [full_dataset.image_info[i]["id"] for i in val_indices]
+
+        logger.info(
+            f"Training on {len(train_indices)} images, "
+            f"validating on {len(val_indices)} images"
+        )
+
+        # Create split datasets
+        train_dataset = COCODetectionDataset(
+            coco_json_path=labels_dir,
+            images_dir=images_dir,
+            image_ids=train_image_ids,
+            category_mapping=full_dataset.category_mapping,
+            transforms=get_transform(train=True),
+            num_channels=num_channels,
+            min_area=10,
+            compute_masks=_needs_masks,
+        )
+        val_dataset = COCODetectionDataset(
+            coco_json_path=labels_dir,
+            images_dir=images_dir,
+            image_ids=val_image_ids,
+            category_mapping=full_dataset.category_mapping,
+            transforms=get_transform(train=False),
+            num_channels=num_channels,
+            min_area=10,
+            compute_masks=_needs_masks,
+        )
+
+    elif input_format.lower() == "coco":
+        # Parse COCO format annotations
+        if verbose:
+            logger.info(f"Loading COCO format annotations from {labels_dir}")
+        # For COCO format, labels_dir is path to instances.json
+        # Labels are typically in a "labels" directory parallel to "annotations"
+        coco_root = os.path.dirname(os.path.dirname(labels_dir))  # Go up two levels
+        labels_directory = os.path.join(coco_root, "labels")
+        image_files, label_files = parse_coco_annotations(
+            labels_dir, images_dir, labels_directory
+        )
+    elif input_format.lower() == "yolo":
+        # Parse YOLO format annotations
+        if verbose:
+            logger.info(f"Loading YOLO format data from {images_dir}")
+        image_files, label_files = parse_yolo_annotations(images_dir)
+    else:
+        # Default: directory format
+        # Support multiple image formats: GeoTIFF, PNG, JPG, JPEG, TIF, TIFF
+        image_extensions = (".tif", ".tiff", ".png", ".jpg", ".jpeg")
+        label_extensions = (".tif", ".tiff", ".png", ".jpg", ".jpeg")
+
+        image_files = sorted(
+            [
+                os.path.join(images_dir, f)
+                for f in os.listdir(images_dir)
+                if f.lower().endswith(image_extensions)
+            ]
+        )
+        label_files = sorted(
+            [
+                os.path.join(labels_dir, f)
+                for f in os.listdir(labels_dir)
+                if f.lower().endswith(label_extensions)
+            ]
+        )
+
+        # Ensure matching files
+        if len(image_files) != len(label_files):
+            logger.warning(
+                "Warning: Number of image files and label files don't match!"
+            )
+            # Find matching files by basename
+            basenames = [os.path.basename(f) for f in image_files]
+            label_files = [
+                os.path.join(labels_dir, os.path.basename(f))
+                for f in image_files
+                if os.path.exists(os.path.join(labels_dir, os.path.basename(f)))
+            ]
+            image_files = [
+                f
+                for f, b in zip(image_files, basenames)
+                if os.path.exists(os.path.join(labels_dir, b))
+            ]
+            logger.info(f"Using {len(image_files)} matching files")
+
+    if not use_coco_detection:
+        logger.info(
+            f"Found {len(image_files)} image files and {len(label_files)} label files"
+        )
+
+        # Warn when users request multi-class training but forget to opt in
+        # to multiclass label parsing: every target would silently become
+        # class 1 and the model could only learn the first foreground class.
+        if (
+            input_format.lower() == "directory"
+            and num_classes > 2
+            and not multiclass
+            and not instance_labels
+        ):
+            logger.warning(
+                "num_classes=%d was requested but multiclass=False; "
+                "ObjectDetectionDataset will assign every instance label=1 "
+                "and the model will only learn one foreground class. "
+                "Pass multiclass=True to read class IDs from label mask "
+                "pixel values.",
+                num_classes,
+            )
+
+        # Split data into train and validation sets
+        train_imgs, val_imgs, train_labels, val_labels = train_test_split(
+            image_files, label_files, test_size=val_split, random_state=seed
+        )
+
+        logger.info(
+            f"Training on {len(train_imgs)} images, "
+            f"validating on {len(val_imgs)} images"
+        )
+
+        # Create datasets
+        train_dataset = ObjectDetectionDataset(
+            train_imgs,
+            train_labels,
+            transforms=get_transform(train=True),
+            instance_labels=instance_labels,
+            multiclass=multiclass,
+        )
+        val_dataset = ObjectDetectionDataset(
+            val_imgs,
+            val_labels,
+            transforms=get_transform(train=False),
+            instance_labels=instance_labels,
+            multiclass=multiclass,
+        )
 
     # Create data loaders
     # Use num_workers=0 on macOS and Windows to avoid multiprocessing issues
@@ -883,10 +1849,13 @@ def train_MaskRCNN_model(
         num_workers=num_workers,
     )
 
-    # Initialize model (2 classes: background and building)
+    # Initialize model
     if model is None:
-        model = get_instance_segmentation_model(
-            num_classes=2, num_channels=num_channels, pretrained=pretrained
+        model = get_detection_model(
+            model_name=model_name,
+            num_classes=num_classes,
+            num_channels=num_channels,
+            pretrained=pretrained,
         )
     model.to(device)
 
@@ -919,7 +1888,7 @@ def train_MaskRCNN_model(
                 f"Pretrained model file not found: {pretrained_model_path}"
             )
 
-        print(f"Loading pretrained model from: {pretrained_model_path}")
+        logger.info(f"Loading pretrained model from: {pretrained_model_path}")
         try:
             # Check if it's a full checkpoint or just model weights
             checkpoint = torch.load(pretrained_model_path, map_location=device)
@@ -939,13 +1908,13 @@ def train_MaskRCNN_model(
                     if "scheduler_state_dict" in checkpoint:
                         lr_scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
 
-                    print(f"Resuming training from epoch {start_epoch}")
-                    print(f"Previous best IoU: {best_iou:.4f}")
+                    logger.info(f"Resuming training from epoch {start_epoch}")
+                    logger.info(f"Previous best IoU: {best_iou:.4f}")
             else:
                 # Assume it's just the model weights
                 model.load_state_dict(checkpoint)
 
-            print("Pretrained model loaded successfully")
+            logger.info("Pretrained model loaded successfully")
         except Exception as e:
             raise RuntimeError(f"Failed to load pretrained model: {str(e)}")
 
@@ -960,7 +1929,9 @@ def train_MaskRCNN_model(
         lr_scheduler.step()
 
         # Evaluate
-        eval_metrics = evaluate(model, val_loader, device)
+        eval_metrics = evaluate(
+            model, val_loader, device, use_mask_iou=model_has_masks(model_name)
+        )
 
         # Record training history
         training_history["train_loss"].append(train_loss)
@@ -970,14 +1941,14 @@ def train_MaskRCNN_model(
         training_history["lr"].append(optimizer.param_groups[0]["lr"])
 
         # Print metrics
-        print(
+        logger.info(
             f"Epoch {epoch+1}/{num_epochs}: Train Loss: {train_loss:.4f}, Val Loss: {eval_metrics['loss']:.4f}, Val IoU: {eval_metrics['IoU']:.4f}"
         )
 
         # Save best model
         if eval_metrics["IoU"] > best_iou:
             best_iou = eval_metrics["IoU"]
-            print(f"Saving best model with IoU: {best_iou:.4f}")
+            logger.info(f"Saving best model with IoU: {best_iou:.4f}")
             torch.save(model.state_dict(), os.path.join(output_dir, "best_model.pth"))
 
     # Save final model
@@ -991,13 +1962,13 @@ def train_MaskRCNN_model(
 
     # Final evaluation
     final_metrics = evaluate(model, val_loader, device)
-    print(
+    logger.info(
         f"Final Evaluation - Loss: {final_metrics['loss']:.4f}, IoU: {final_metrics['IoU']:.4f}"
     )
 
     # Visualize results
     if visualize:
-        print("Generating visualizations...")
+        logger.info("Generating visualizations...")
         visualize_predictions(
             model,
             val_dataset,
@@ -1021,7 +1992,7 @@ def train_MaskRCNN_model(
             if resume_training:
                 f.write(f"Resumed training from epoch {start_epoch}\n")
 
-    print(f"Training complete! Trained model saved to {output_dir}")
+    logger.info(f"Training complete! Trained model saved to {output_dir}")
 
 
 def inference_on_geotiff(
@@ -1035,7 +2006,7 @@ def inference_on_geotiff(
     num_channels: int = 3,
     device: Optional[torch.device] = None,
     **kwargs: Any,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[str, float]:
     """
     Perform inference on a large GeoTIFF using a sliding window approach with improved blending.
 
@@ -1089,7 +2060,7 @@ def inference_on_geotiff(
         last_x = width - window_size
 
         total_windows = steps_y * steps_x
-        print(
+        logger.info(
             f"Processing {total_windows} windows with size {window_size}x{window_size} and overlap {overlap}..."
         )
 
@@ -1237,13 +2208,13 @@ def inference_on_geotiff(
 
         # Record time
         inference_time = time.time() - start_time
-        print(f"Inference completed in {inference_time:.2f} seconds")
+        logger.info(f"Inference completed in {inference_time:.2f} seconds")
 
         # Save output
         with rasterio.open(output_path, "w", **out_meta) as dst:
             dst.write(mask, 1)
 
-        print(f"Saved prediction to {output_path}")
+        logger.info(f"Saved prediction to {output_path}")
 
         return output_path, inference_time
 
@@ -1255,31 +2226,52 @@ def instance_segmentation_inference_on_geotiff(
     window_size: int = 512,
     overlap: int = 256,
     confidence_threshold: float = 0.5,
+    nms_threshold: float = 0.3,
     batch_size: int = 4,
     num_channels: int = 3,
     device: Optional[torch.device] = None,
     **kwargs: Any,
-) -> Tuple[str, float]:
+) -> Tuple[Dict[str, str], float, List[Dict]]:
     """
-    Perform instance segmentation inference on a large GeoTIFF using a sliding window approach.
+    Perform instance segmentation inference on a large GeoTIFF using a
+    sliding window approach.
 
-    This function collects all detections first, then applies non-maximum suppression
-    to handle overlapping detections from different windows, preventing artifacts.
+    This function collects all detections first, then applies class-aware
+    non-maximum suppression to handle overlapping detections from different
+    windows, preventing artifacts. Three single-band rasters are saved:
+
+    - Instance ID raster at ``output_path``.
+    - Class label raster at ``output_path`` with a ``_class`` suffix.
+    - Confidence score raster at ``output_path`` with a ``_score`` suffix.
+
+    Detections are returned with compact window-sized masks and their
+    offsets to avoid materializing full-image arrays per instance.
 
     Args:
         model (torch.nn.Module): Trained model for inference.
         geotiff_path (str): Path to input GeoTIFF file.
-        output_path (str): Path to save output instance mask GeoTIFF.
+        output_path (str): Path to save the instance ID raster. Class and
+            score rasters are saved alongside with ``_class`` and ``_score``
+            suffixes.
         window_size (int): Size of sliding window for inference.
         overlap (int): Overlap between adjacent windows.
-        confidence_threshold (float): Confidence threshold for predictions (0-1).
+        confidence_threshold (float): Confidence threshold for predictions
+            (0-1).
+        nms_threshold (float): IoU threshold for non-maximum suppression.
+            Defaults to 0.3.
         batch_size (int): Batch size for inference.
         num_channels (int): Number of channels to use from the input image.
-        device (torch.device, optional): Device to run inference on. If None, uses CUDA if available.
+        device (torch.device, optional): Device to run inference on.
+            If None, uses CUDA if available.
         **kwargs: Additional arguments.
 
     Returns:
-        tuple: Tuple containing output path and inference time in seconds.
+        tuple: Tuple of (output_paths_dict, inference_time, detections_list).
+            output_paths_dict has keys: ``instance``, ``class_label``,
+            ``score``. Each detection is a dict with keys: ``mask``
+            (np.ndarray, window-sized), ``mask_offset`` (tuple of
+            y, x, h, w), ``score`` (float), ``box`` (list in global
+            pixel coords), ``label`` (int), ``instance_id`` (int).
     """
     if device is None:
         device = get_device()
@@ -1295,11 +2287,10 @@ def instance_segmentation_inference_on_geotiff(
         height = src.height
         width = src.width
 
-        # Update metadata for output raster
-        out_meta = meta.copy()
-        out_meta.update(
-            {"count": 1, "dtype": "uint16"}  # uint16 to support many instances
-        )
+        # Derive sibling file paths for class and score rasters
+        base, ext = os.path.splitext(output_path)
+        class_path = f"{base}_class{ext}"
+        score_path = f"{base}_score{ext}"
 
         # Store all detections globally for NMS
         all_detections = []
@@ -1313,7 +2304,7 @@ def instance_segmentation_inference_on_geotiff(
         last_x = width - window_size
 
         total_windows = steps_y * steps_x
-        print(
+        logger.info(
             f"Processing {total_windows} windows with size {window_size}x{window_size} and overlap {overlap}..."
         )
 
@@ -1393,12 +2384,14 @@ def instance_segmentation_inference_on_geotiff(
                             masks = output["masks"][keep].squeeze(1)
                             scores = output["scores"][keep]
                             boxes = output["boxes"][keep]
+                            det_labels = output["labels"][keep]
 
                             # Convert to global coordinates and store
                             for k in range(len(masks)):
                                 mask = masks[k].cpu().numpy() > 0.5
                                 score = scores[k].cpu().item()
                                 box = boxes[k].cpu().numpy()
+                                label = det_labels[k].cpu().item()
 
                                 # Convert box to global coordinates
                                 global_box = [
@@ -1408,15 +2401,15 @@ def instance_segmentation_inference_on_geotiff(
                                     box[3] + y_pos,
                                 ]
 
-                                # Create global mask
-                                global_mask = np.zeros((height, width), dtype=bool)
-                                global_mask[y_pos : y_pos + h, x_pos : x_pos + w] = mask
-
+                                # Store compact mask with offset
+                                # (avoids full-image arrays before NMS)
                                 all_detections.append(
                                     {
-                                        "mask": global_mask,
+                                        "mask": mask,
+                                        "mask_offset": (y_pos, x_pos, h, w),
                                         "score": score,
                                         "box": global_box,
+                                        "label": label,
                                     }
                                 )
 
@@ -1431,9 +2424,9 @@ def instance_segmentation_inference_on_geotiff(
         # Close progress bar
         pbar.close()
 
-        print(f"Collected {len(all_detections)} detections before NMS")
+        logger.info(f"Collected {len(all_detections)} detections before NMS")
 
-        # Apply Non-Maximum Suppression to handle overlapping detections
+        # Apply class-aware Non-Maximum Suppression
         if len(all_detections) > 0:
             # Convert to tensors for NMS
             boxes = torch.tensor(
@@ -1442,45 +2435,580 @@ def instance_segmentation_inference_on_geotiff(
             scores = torch.tensor(
                 [det["score"] for det in all_detections], dtype=torch.float32
             )
+<<<<<<< HEAD
+=======
+            det_labels = torch.tensor(
+                [det["label"] for det in all_detections], dtype=torch.int64
+            )
+>>>>>>> upstream/main
 
-            # Apply NMS with IoU threshold
-            nms_threshold = 0.3  # IoU threshold for NMS
-            keep_indices = torchvision.ops.nms(boxes, scores, nms_threshold)
+            # Apply class-aware NMS
+            keep_indices = torchvision.ops.batched_nms(
+                boxes, scores, det_labels, nms_threshold
+            )
+
+            # Convert to plain int list for reliable Python list indexing
+            keep_indices = keep_indices.cpu().tolist()
 
             # Keep only the selected detections
             final_detections = [all_detections[i] for i in keep_indices]
-            print(f"After NMS: {len(final_detections)} detections")
+            logger.info(f"After NMS: {len(final_detections)} detections")
 
-            # Create final instance mask
-            instance_mask = np.zeros((height, width), dtype=np.uint16)
+            # Create final output masks
+            class_mask = np.zeros((height, width), dtype=np.uint16)
+            instance_mask = np.zeros((height, width), dtype=np.uint32)
+            score_mask = np.zeros((height, width), dtype=np.float32)
 
             # Sort by score (highest first) for consistent ordering
             final_detections.sort(key=lambda x: x["score"], reverse=True)
 
-            # Assign unique IDs to each detection
+            # Write raster bands from compact masks using window slices
+            # (avoids allocating full-image arrays per detection)
             for instance_id, detection in enumerate(final_detections, 1):
-                mask = detection["mask"]
-                # Only assign to pixels that are not already assigned
-                available_pixels = (instance_mask == 0) & mask
-                instance_mask[available_pixels] = instance_id
+                y_pos, x_pos, h, w = detection["mask_offset"]
+                detection["instance_id"] = instance_id
+
+                # Crop mask to actual window dimensions (may differ at edges)
+                compact_mask = detection["mask"][:h, :w]
+
+                # Write directly into raster arrays using window slice
+                region_inst = instance_mask[y_pos : y_pos + h, x_pos : x_pos + w]
+                available = (region_inst == 0) & compact_mask
+                class_mask[y_pos : y_pos + h, x_pos : x_pos + w][available] = detection[
+                    "label"
+                ]
+                instance_mask[y_pos : y_pos + h, x_pos : x_pos + w][
+                    available
+                ] = instance_id
+                score_mask[y_pos : y_pos + h, x_pos : x_pos + w][available] = detection[
+                    "score"
+                ]
         else:
             # No detections found
-            instance_mask = np.zeros((height, width), dtype=np.uint16)
+            class_mask = np.zeros((height, width), dtype=np.uint16)
+            instance_mask = np.zeros((height, width), dtype=np.uint32)
+            score_mask = np.zeros((height, width), dtype=np.float32)
+            final_detections = []
 
         # Record time
         inference_time = time.time() - start_time
-        print(f"Instance segmentation completed in {inference_time:.2f} seconds")
-        print(
-            f"Final instances: {len(final_detections) if len(all_detections) > 0 else 0}"
-        )
+        logger.info(f"Instance segmentation completed in {inference_time:.2f} seconds")
+        logger.info(f"Final instances: {len(final_detections)}")
 
-        # Save output
-        with rasterio.open(output_path, "w", **out_meta) as dst:
+        # Save instance raster (uint32)
+        inst_meta = meta.copy()
+        inst_meta.update({"count": 1, "dtype": "uint32"})
+        with rasterio.open(output_path, "w", **inst_meta) as dst:
             dst.write(instance_mask, 1)
 
-        print(f"Saved instance segmentation to {output_path}")
+        # Save class raster (uint16)
+        cls_meta = meta.copy()
+        cls_meta.update({"count": 1, "dtype": "uint16"})
+        with rasterio.open(class_path, "w", **cls_meta) as dst:
+            dst.write(class_mask, 1)
 
-        return output_path, inference_time
+        # Save score raster (float32)
+        score_meta = meta.copy()
+        score_meta.update({"count": 1, "dtype": "float32"})
+        with rasterio.open(score_path, "w", **score_meta) as dst:
+            dst.write(score_mask, 1)
+
+        output_paths = {
+            "instance": output_path,
+            "class_label": class_path,
+            "score": score_path,
+        }
+        logger.info(f"Saved instance raster to {output_path}")
+        logger.info(f"Saved class raster to {class_path}")
+        logger.info(f"Saved score raster to {score_path}")
+
+        return output_paths, inference_time, final_detections
+
+
+def multiclass_detection_inference_on_geotiff(
+    model: torch.nn.Module,
+    geotiff_path: str,
+    output_path: str,
+    class_names: Optional[List[str]] = None,
+    window_size: int = 512,
+    overlap: int = 256,
+    confidence_threshold: float = 0.5,
+    nms_threshold: float = 0.3,
+    batch_size: int = 4,
+    num_channels: int = 3,
+    device: Optional[torch.device] = None,
+    **kwargs: Any,
+) -> Tuple[str, float, List[Dict]]:
+    """Perform multi-class object detection inference on a GeoTIFF.
+
+    Unlike inference_on_geotiff which produces a binary mask, and
+    instance_segmentation_inference_on_geotiff which produces instance IDs
+    without class info, this function preserves both class labels and
+    instance IDs in the output.
+
+    Args:
+        model (torch.nn.Module): Trained Mask R-CNN model.
+        geotiff_path (str): Path to input GeoTIFF file.
+        output_path (str): Path to save output raster (2-band: class + instance).
+        class_names (list, optional): List of class names (index 0 = background).
+        window_size (int): Size of sliding window for inference. Defaults to 512.
+        overlap (int): Overlap between adjacent windows. Defaults to 256.
+        confidence_threshold (float): Minimum score threshold. Defaults to 0.5.
+        nms_threshold (float): IoU threshold for NMS. Defaults to 0.3.
+        batch_size (int): Inference batch size. Defaults to 4.
+        num_channels (int): Number of input channels. Defaults to 3.
+        device (torch.device, optional): Compute device. If None, auto-detected.
+        **kwargs: Additional arguments.
+
+    Returns:
+        Tuple of (output_path, inference_time, detections_list) where each
+        detection is a dict with keys: mask, score, box, label.
+    """
+    if device is None:
+        device = get_device()
+
+    model.to(device)
+    model.eval()
+
+    with rasterio.open(geotiff_path) as src:
+        meta = src.meta
+        height = src.height
+        width = src.width
+
+        out_meta = meta.copy()
+
+        all_detections = []
+
+        stride = window_size - overlap
+        # Compute exact number of steps so loop bounds match total_windows
+        steps_y = max(1, math.ceil((height - window_size) / stride) + 1)
+        steps_x = max(1, math.ceil((width - window_size) / stride) + 1)
+        total_windows = steps_y * steps_x
+
+        logger.info(
+            f"Processing {total_windows} windows with size "
+            f"{window_size}x{window_size} and overlap {overlap}..."
+        )
+
+        pbar = tqdm(total=total_windows)
+        batch_inputs = []
+        batch_positions = []
+        batch_count = 0
+        start_time = time.time()
+
+        for i in range(steps_y):
+            y = min(i * stride, height - window_size)
+            y = max(0, y)
+
+            for j in range(steps_x):
+                x = min(j * stride, width - window_size)
+                x = max(0, x)
+
+                window = src.read(window=Window(x, y, window_size, window_size))
+                if window.shape[1] == 0 or window.shape[2] == 0:
+                    continue
+
+                actual_height, actual_width = window.shape[1], window.shape[2]
+                image = window.astype(np.float32) / 255.0
+
+                if image.shape[0] > num_channels:
+                    image = image[:num_channels]
+                elif image.shape[0] < num_channels:
+                    padded = np.zeros(
+                        (num_channels, image.shape[1], image.shape[2]),
+                        dtype=np.float32,
+                    )
+                    padded[: image.shape[0]] = image
+                    image = padded
+
+                image_tensor = torch.tensor(image, device=device)
+                batch_inputs.append(image_tensor)
+                batch_positions.append((y, x, actual_height, actual_width))
+                batch_count += 1
+
+                if batch_count == batch_size or (i == steps_y - 1 and j == steps_x - 1):
+                    with torch.no_grad():
+                        outputs = model(batch_inputs)
+
+                    for idx, output in enumerate(outputs):
+                        y_pos, x_pos, h, w = batch_positions[idx]
+
+                        if len(output["scores"]) > 0:
+                            keep = output["scores"] > confidence_threshold
+                            scores = output["scores"][keep]
+                            boxes = output["boxes"][keep]
+                            det_labels = output["labels"][keep]
+                            has_masks = "masks" in output
+                            if has_masks:
+                                masks = output["masks"][keep].squeeze(1)
+
+                            for k in range(len(scores)):
+                                score = scores[k].cpu().item()
+                                box = boxes[k].cpu().numpy()
+                                label = det_labels[k].cpu().item()
+
+                                if has_masks:
+                                    mask = masks[k].cpu().numpy() > 0.5
+                                else:
+                                    # Create box-shaped mask for
+                                    # bbox-only models
+                                    mask = np.zeros((h, w), dtype=bool)
+                                    bx = box.astype(int)
+                                    mask[
+                                        max(0, bx[1]) : min(h, bx[3]),
+                                        max(0, bx[0]) : min(w, bx[2]),
+                                    ] = True
+
+                                global_box = [
+                                    box[0] + x_pos,
+                                    box[1] + y_pos,
+                                    box[2] + x_pos,
+                                    box[3] + y_pos,
+                                ]
+
+                                all_detections.append(
+                                    {
+                                        "mask": mask,
+                                        "mask_offset": (y_pos, x_pos, h, w),
+                                        "score": score,
+                                        "box": global_box,
+                                        "label": label,
+                                    }
+                                )
+
+                    batch_inputs = []
+                    batch_positions = []
+                    batch_count = 0
+                    pbar.update(len(outputs))
+
+        pbar.close()
+        logger.info(f"Collected {len(all_detections)} detections before NMS")
+
+        # Apply class-aware Non-Maximum Suppression
+        if len(all_detections) > 0:
+            boxes = torch.tensor(
+                [det["box"] for det in all_detections], dtype=torch.float32
+            )
+            scores = torch.tensor(
+                [det["score"] for det in all_detections], dtype=torch.float32
+            )
+            det_labels = torch.tensor(
+                [det["label"] for det in all_detections], dtype=torch.int64
+            )
+
+            keep_indices = torchvision.ops.batched_nms(
+                boxes, scores, det_labels, nms_threshold
+            )
+
+            final_detections = [all_detections[i] for i in keep_indices]
+            logger.info(f"After NMS: {len(final_detections)} detections")
+
+            # Create output rasters (uint8 for class, uint32 for instance)
+            class_mask = np.zeros((height, width), dtype=np.uint8)
+            instance_mask = np.zeros((height, width), dtype=np.uint32)
+
+            final_detections.sort(key=lambda x: x["score"], reverse=True)
+
+            # Materialize full-size masks only for final kept detections
+            for instance_id, detection in enumerate(final_detections, 1):
+                compact_mask = detection["mask"]
+                y_pos, x_pos, h, w = detection["mask_offset"]
+                full_mask = np.zeros((height, width), dtype=bool)
+                full_mask[y_pos : y_pos + h, x_pos : x_pos + w] = compact_mask
+                # Replace compact mask with full mask for downstream use
+                detection["mask"] = full_mask
+                del detection["mask_offset"]
+
+                available_pixels = (instance_mask == 0) & full_mask
+                class_mask[available_pixels] = detection["label"]
+                instance_mask[available_pixels] = instance_id
+        else:
+            class_mask = np.zeros((height, width), dtype=np.uint8)
+            instance_mask = np.zeros((height, width), dtype=np.uint32)
+            final_detections = []
+
+        inference_time = time.time() - start_time
+        logger.info(f"Multi-class detection completed in {inference_time:.2f} seconds")
+        logger.info(f"Final detections: {len(final_detections)}")
+
+        if class_names and len(final_detections) > 0:
+            from collections import Counter
+
+            label_counts = Counter(d["label"] for d in final_detections)
+            for label_id, count in sorted(label_counts.items()):
+                name = (
+                    class_names[label_id]
+                    if label_id < len(class_names)
+                    else f"class_{label_id}"
+                )
+                logger.info(f"  {name}: {count} detections")
+
+        # Write class band as uint8, instance band as uint32
+        out_meta.update({"count": 2, "dtype": "uint32"})
+        with rasterio.open(output_path, "w", **out_meta) as dst:
+            dst.write(class_mask.astype(np.uint32), 1)
+            dst.write(instance_mask, 2)
+
+        logger.info(f"Saved multi-class detection to {output_path}")
+
+        return output_path, inference_time, final_detections
+
+
+def evaluate_coco_metrics(
+    model: torch.nn.Module,
+    data_loader: DataLoader,
+    device: torch.device,
+    class_names: Optional[List[str]] = None,
+    iou_thresholds: Optional[List[float]] = None,
+    verbose: bool = True,
+) -> Dict[str, float]:
+    """Evaluate object detection model using COCO-style metrics.
+
+    Computes AP (Average Precision) at various IoU thresholds for each class
+    and mAP (mean AP) across all classes.
+
+    Args:
+        model (torch.nn.Module): Trained detection model.
+        data_loader (DataLoader): Validation data loader.
+        device (torch.device): Compute device.
+        class_names (list, optional): List of class names (excluding background).
+            Index 0 corresponds to class label 1.
+        iou_thresholds (list, optional): IoU thresholds for AP calculation.
+            Defaults to [0.5, 0.55, ..., 0.95].
+        verbose (bool): Whether to print progress. Defaults to True.
+
+    Returns:
+        Dict with keys: 'mAP@0.5', 'mAP@0.75', 'mAP@[0.5:0.95]',
+        and per-class 'AP@0.5/<class_name>' entries.
+    """
+    if iou_thresholds is None:
+        iou_thresholds = [0.5 + 0.05 * i for i in range(10)]
+
+    model.eval()
+
+    # Collect all predictions and ground truths
+    all_predictions = []  # list of dicts per image
+    all_targets = []
+
+    if verbose:
+        logger.info("Running inference for evaluation...")
+
+    for images, targets in tqdm(data_loader, disable=not verbose):
+        images = [img.to(device) for img in images]
+
+        with torch.no_grad():
+            outputs = model(images)
+
+        for output, target in zip(outputs, targets):
+            pred = {
+                "boxes": output["boxes"].cpu(),
+                "scores": output["scores"].cpu(),
+                "labels": output["labels"].cpu(),
+            }
+            gt = {
+                "boxes": target["boxes"].cpu(),
+                "labels": target["labels"].cpu(),
+            }
+            all_predictions.append(pred)
+            all_targets.append(gt)
+
+    # Determine all class IDs present
+    all_class_ids = set()
+    for gt in all_targets:
+        all_class_ids.update(gt["labels"].tolist())
+    for pred in all_predictions:
+        all_class_ids.update(pred["labels"].tolist())
+    all_class_ids = sorted(all_class_ids)
+
+    def _compute_iou_matrix(boxes1, boxes2):
+        """Compute IoU between two sets of boxes."""
+        x1 = torch.max(boxes1[:, None, 0], boxes2[None, :, 0])
+        y1 = torch.max(boxes1[:, None, 1], boxes2[None, :, 1])
+        x2 = torch.min(boxes1[:, None, 2], boxes2[None, :, 2])
+        y2 = torch.min(boxes1[:, None, 3], boxes2[None, :, 3])
+
+        inter = (x2 - x1).clamp(min=0) * (y2 - y1).clamp(min=0)
+        area1 = (boxes1[:, 2] - boxes1[:, 0]) * (boxes1[:, 3] - boxes1[:, 1])
+        area2 = (boxes2[:, 2] - boxes2[:, 0]) * (boxes2[:, 3] - boxes2[:, 1])
+        union = area1[:, None] + area2[None, :] - inter
+
+        return inter / (union + 1e-6)
+
+    def _compute_ap(precision, recall):
+        """Compute AP using 101-point interpolation (COCO style)."""
+        recall_points = torch.linspace(0, 1, 101)
+        ap = 0.0
+        for r in recall_points:
+            prec_at_r = precision[recall >= r]
+            if len(prec_at_r) > 0:
+                ap += prec_at_r.max().item()
+        return ap / 101.0
+
+    results = {}
+
+    for iou_thresh in iou_thresholds:
+        per_class_ap = []
+
+        for class_id in all_class_ids:
+            # Gather all predictions and ground truths for this class
+            all_scores = []
+            all_tp = []
+            total_gt = 0
+
+            for pred, gt in zip(all_predictions, all_targets):
+                # Filter predictions for this class
+                pred_mask = pred["labels"] == class_id
+                pred_boxes = pred["boxes"][pred_mask]
+                pred_scores = pred["scores"][pred_mask]
+
+                # Filter ground truths for this class
+                gt_mask = gt["labels"] == class_id
+                gt_boxes = gt["boxes"][gt_mask]
+                total_gt += len(gt_boxes)
+
+                if len(pred_boxes) == 0:
+                    continue
+
+                # Sort by score (descending)
+                sort_idx = torch.argsort(pred_scores, descending=True)
+                pred_boxes = pred_boxes[sort_idx]
+                pred_scores = pred_scores[sort_idx]
+
+                matched_gt = set()
+
+                for pi in range(len(pred_boxes)):
+                    all_scores.append(pred_scores[pi].item())
+
+                    if len(gt_boxes) == 0:
+                        all_tp.append(0)
+                        continue
+
+                    iou_matrix = _compute_iou_matrix(pred_boxes[pi : pi + 1], gt_boxes)
+                    max_iou, max_idx = iou_matrix[0].max(dim=0)
+
+                    if (
+                        max_iou.item() >= iou_thresh
+                        and max_idx.item() not in matched_gt
+                    ):
+                        all_tp.append(1)
+                        matched_gt.add(max_idx.item())
+                    else:
+                        all_tp.append(0)
+
+            if total_gt == 0:
+                continue
+
+            # Sort by score
+            if len(all_scores) == 0:
+                per_class_ap.append(0.0)
+                continue
+
+            sort_idx = sorted(
+                range(len(all_scores)),
+                key=lambda k: all_scores[k],
+                reverse=True,
+            )
+            tp_sorted = torch.tensor([all_tp[i] for i in sort_idx])
+
+            tp_cumsum = torch.cumsum(tp_sorted, dim=0).float()
+            fp_cumsum = torch.cumsum(1 - tp_sorted, dim=0).float()
+
+            precision = tp_cumsum / (tp_cumsum + fp_cumsum)
+            recall = tp_cumsum / total_gt
+
+            ap = _compute_ap(precision, recall)
+            per_class_ap.append(ap)
+
+            # Store per-class AP at 0.5
+            if abs(iou_thresh - 0.5) < 1e-6 and class_names is not None:
+                idx = class_id - 1  # class_id is 1-indexed
+                name = (
+                    class_names[idx] if idx < len(class_names) else f"class_{class_id}"
+                )
+                results[f"AP@0.5/{name}"] = ap
+
+        mean_ap = sum(per_class_ap) / len(per_class_ap) if per_class_ap else 0.0
+
+        if abs(iou_thresh - 0.5) < 1e-6:
+            results["mAP@0.5"] = mean_ap
+        if abs(iou_thresh - 0.75) < 1e-6:
+            results["mAP@0.75"] = mean_ap
+
+    # Compute mAP@[0.5:0.95]
+    all_maps = []
+    for iou_thresh in iou_thresholds:
+        per_class_ap = []
+        for class_id in all_class_ids:
+            all_scores = []
+            all_tp = []
+            total_gt = 0
+
+            for pred, gt in zip(all_predictions, all_targets):
+                pred_mask = pred["labels"] == class_id
+                pred_boxes = pred["boxes"][pred_mask]
+                pred_scores = pred["scores"][pred_mask]
+                gt_mask = gt["labels"] == class_id
+                gt_boxes = gt["boxes"][gt_mask]
+                total_gt += len(gt_boxes)
+
+                if len(pred_boxes) == 0:
+                    continue
+
+                sort_idx = torch.argsort(pred_scores, descending=True)
+                pred_boxes = pred_boxes[sort_idx]
+                pred_scores = pred_scores[sort_idx]
+                matched_gt = set()
+
+                for pi in range(len(pred_boxes)):
+                    all_scores.append(pred_scores[pi].item())
+                    if len(gt_boxes) == 0:
+                        all_tp.append(0)
+                        continue
+                    iou_matrix = _compute_iou_matrix(pred_boxes[pi : pi + 1], gt_boxes)
+                    max_iou, max_idx = iou_matrix[0].max(dim=0)
+                    if (
+                        max_iou.item() >= iou_thresh
+                        and max_idx.item() not in matched_gt
+                    ):
+                        all_tp.append(1)
+                        matched_gt.add(max_idx.item())
+                    else:
+                        all_tp.append(0)
+
+            if total_gt == 0 or len(all_scores) == 0:
+                per_class_ap.append(0.0)
+                continue
+
+            sort_idx = sorted(
+                range(len(all_scores)),
+                key=lambda k: all_scores[k],
+                reverse=True,
+            )
+            tp_sorted = torch.tensor([all_tp[i] for i in sort_idx])
+            tp_cumsum = torch.cumsum(tp_sorted, dim=0).float()
+            fp_cumsum = torch.cumsum(1 - tp_sorted, dim=0).float()
+            precision = tp_cumsum / (tp_cumsum + fp_cumsum)
+            recall = tp_cumsum / total_gt
+            ap = _compute_ap(precision, recall)
+            per_class_ap.append(ap)
+
+        mean_ap = sum(per_class_ap) / len(per_class_ap) if per_class_ap else 0.0
+        all_maps.append(mean_ap)
+
+    results["mAP@[0.5:0.95]"] = sum(all_maps) / len(all_maps) if all_maps else 0.0
+
+    if verbose:
+        logger.info(f"\nEvaluation Results:")
+        logger.info(f"  mAP@0.5:        {results.get('mAP@0.5', 0.0):.4f}")
+        logger.info(f"  mAP@0.75:       {results.get('mAP@0.75', 0.0):.4f}")
+        logger.info(f"  mAP@[0.5:0.95]: {results['mAP@[0.5:0.95]']:.4f}")
+        if class_names:
+            logger.info(f"\n  Per-class AP@0.5:")
+            for key, value in sorted(results.items()):
+                if key.startswith("AP@0.5/"):
+                    logger.info(f"    {key}: {value:.4f}")
+
+    return results
 
 
 def object_detection(
@@ -1492,6 +3020,7 @@ def object_detection(
     confidence_threshold: float = 0.5,
     batch_size: int = 4,
     num_channels: int = 3,
+    num_classes: int = 2,
     model: Optional[torch.nn.Module] = None,
     pretrained: bool = True,
     device: Optional[torch.device] = None,
@@ -1509,6 +3038,7 @@ def object_detection(
         confidence_threshold (float): Confidence threshold for predictions (0-1).
         batch_size (int): Batch size for inference.
         num_channels (int): Number of channels in the input image and model.
+        num_classes (int): Number of output classes including background. Defaults to 2.
         model (torch.nn.Module, optional): Predefined model. If None, a new model is created.
         pretrained (bool): Whether to use pretrained backbone for model loading.
         device (torch.device, optional): Device to run inference on. If None, uses CUDA if available.
@@ -1522,7 +3052,7 @@ def object_detection(
         device = get_device()
     if model is None:
         model = get_instance_segmentation_model(
-            num_classes=2, num_channels=num_channels, pretrained=pretrained
+            num_classes=num_classes, num_channels=num_channels, pretrained=pretrained
         )
 
     if not os.path.exists(model_path):
@@ -1569,6 +3099,7 @@ def object_detection_batch(
     batch_size: int = 4,
     model: Optional[torch.nn.Module] = None,
     num_channels: int = 3,
+    num_classes: int = 2,
     pretrained: bool = True,
     device: Optional[torch.device] = None,
     **kwargs: Any,
@@ -1577,8 +3108,10 @@ def object_detection_batch(
     Perform object detection on a GeoTIFF using a pre-trained Mask R-CNN model.
 
     Args:
-        input_paths (str or list): Path(s) to input GeoTIFF file(s). If a directory is provided,
-            all .tif files in that directory will be processed.
+        input_paths (str or list): Path(s) to input GeoTIFF file(s). Can be a
+            single file path (.tif or .tiff, case-insensitive), a directory
+            path (all .tif and .tiff files will be processed), or a list of
+            file paths.
         output_dir (str): Directory to save output mask GeoTIFF files.
         model_path (str): Path to trained model weights.
         filenames (list, optional): List of output filenames. If None, defaults to
@@ -1589,6 +3122,7 @@ def object_detection_batch(
         confidence_threshold (float): Confidence threshold for predictions (0-1).
         batch_size (int): Batch size for inference.
         num_channels (int): Number of channels in the input image and model.
+        num_classes (int): Number of output classes including background. Defaults to 2.
         model (torch.nn.Module, optional): Predefined model. If None, a new model is created.
         pretrained (bool): Whether to use pretrained backbone for model loading.
         device (torch.device, optional): Device to run inference on. If None, uses CUDA if available.
@@ -1603,7 +3137,7 @@ def object_detection_batch(
 
     if model is None:
         model = get_instance_segmentation_model(
-            num_classes=2, num_channels=num_channels, pretrained=pretrained
+            num_classes=num_classes, num_channels=num_channels, pretrained=pretrained
         )
 
     if not os.path.exists(output_dir):
@@ -1628,15 +3162,24 @@ def object_detection_batch(
     model.to(device)
     model.eval()
 
-    if isinstance(input_paths, str) and (not input_paths.endswith(".tif")):
-        files = glob.glob(os.path.join(input_paths, "*.tif"))
-        files.sort()
-    elif isinstance(input_paths, str):
+    if isinstance(input_paths, list):
+        files = input_paths
+    elif isinstance(input_paths, str) and not input_paths.lower().endswith(
+        (".tif", ".tiff")
+    ):
+        files = sorted(
+            glob.glob(os.path.join(input_paths, "*.tif"))
+            + glob.glob(os.path.join(input_paths, "*.tiff"))
+        )
+    else:
         files = [input_paths]
 
     if filenames is None:
         filenames = [
-            os.path.join(output_dir, os.path.basename(f).replace(".tif", "_mask.tif"))
+            os.path.join(
+                output_dir,
+                os.path.splitext(os.path.basename(f))[0] + "_mask.tif",
+            )
             for f in files
         ]
     else:
@@ -1644,7 +3187,7 @@ def object_detection_batch(
             raise ValueError("Number of filenames must match number of input files.")
 
     for index, file in enumerate(files):
-        print(f"Processing file {index + 1}/{len(files)}: {file}")
+        logger.info(f"Processing file {index + 1}/{len(files)}: {file}")
         inference_on_geotiff(
             model=model,
             geotiff_path=file,
@@ -1855,19 +3398,14 @@ class SemanticSegmentationDataset(Dataset):
         # Normalize mask values to expected class range [0, num_classes-1]
         # This handles cases where masks contain pixel values outside the expected range
         unique_vals = np.unique(label_mask)
-        if len(unique_vals) > 2:
-            # For multi-class case, we need to map values to proper class indices
-            # For now, we'll use a simple thresholding approach for binary segmentation
-            if self.num_classes == 2:
-                # Binary segmentation: convert to 0 (background) and 1 (foreground)
+        if self.num_classes == 2:
+            # Binary segmentation: normalize any non-zero value to foreground (1)
+            if unique_vals.max() > 1:
                 label_mask = (label_mask > 0).astype(np.int64)
-            else:
-                # For multi-class, we could implement more sophisticated mapping
-                # For now, just ensure values are in valid range
-                label_mask = np.clip(label_mask, 0, self.num_classes - 1)
-        elif len(unique_vals) == 2 and unique_vals.max() > 1:
-            # Binary mask with values not in [0,1] range - normalize to [0,1]
-            label_mask = (label_mask > 0).astype(np.int64)
+        else:
+            # Multi-class segmentation:
+            # Preserve class IDs and only clamp to valid range
+            label_mask = np.clip(label_mask, 0, self.num_classes - 1)
 
         # Convert to tensor
         mask = torch.as_tensor(label_mask, dtype=torch.long)
@@ -2131,7 +3669,7 @@ def get_smp_model(
                     "pan",
                     "upernet",
                 ]
-        except:
+        except Exception:
             available_archs = [
                 "unet",
                 "fpn",
@@ -2398,7 +3936,7 @@ def train_semantic_one_epoch(
         if i % print_freq == 0:
             elapsed_time = time.time() - start_time
             if verbose:
-                print(
+                logger.info(
                     f"Epoch: {epoch + 1}, Batch: {i + 1}/{num_batches}, Loss: {loss.item():.4f}, Time: {elapsed_time:.2f}s"
                 )
             start_time = time.time()
@@ -2506,6 +4044,12 @@ def train_segmentation_model(
     early_stopping_patience: Optional[int] = None,
     train_transforms: Optional[Callable] = None,
     val_transforms: Optional[Callable] = None,
+<<<<<<< HEAD
+=======
+    loss_fn: Optional[torch.nn.Module] = None,
+    class_weights: Optional[List[float]] = None,
+    ignore_index: int = -100,
+>>>>>>> upstream/main
     **kwargs: Any,
 ) -> torch.nn.Module:
     """
@@ -2569,6 +4113,19 @@ def train_segmentation_model(
         val_transforms (callable, optional): Custom transforms for validation data.
             Should be a callable that accepts (image, mask) tensors and returns transformed (image, mask).
             If None, uses default transforms (no augmentation). Defaults to None.
+<<<<<<< HEAD
+=======
+        loss_fn (torch.nn.Module, optional): Custom loss function. When provided,
+            this overrides class_weights and ignore_index. You can pass any
+            PyTorch loss module, including ``DiceLoss``, ``TverskyLoss``, or
+            ``UnifiedFocalLoss`` from ``geoai.landcover_train``. Defaults to None.
+        class_weights (list, optional): Per-class weights for CrossEntropyLoss
+            (e.g., ``[0.5, 2.0]`` for a 2-class problem). Ignored when *loss_fn*
+            is provided. Defaults to None.
+        ignore_index (int): Target value that is ignored by the default
+            CrossEntropyLoss. Ignored when *loss_fn* is provided.
+            Defaults to -100 (PyTorch default, i.e., no pixels ignored).
+>>>>>>> upstream/main
         **kwargs: Additional arguments passed to smp.create_model().
     Returns:
         None: Model weights are saved to output_dir.
@@ -2598,8 +4155,9 @@ def train_segmentation_model(
     # Get device
     if device is None:
         device = get_device()
-    print(f"Using device: {device}")
+    logger.info(f"Using device: {device}")
 
+<<<<<<< HEAD
     # Get all image and label files based on input format
     if input_format.lower() == "coco":
         # Parse COCO format annotations
@@ -2623,6 +4181,34 @@ def train_segmentation_model(
         image_extensions = (".tif", ".tiff", ".png", ".jpg", ".jpeg")
         label_extensions = (".tif", ".tiff", ".png", ".jpg", ".jpeg")
 
+=======
+    # Validate input paths before proceeding
+    _validate_training_paths(images_dir, labels_dir, output_dir, input_format)
+
+    # Get all image and label files based on input format
+    if input_format.lower() == "coco":
+        # Parse COCO format annotations
+        if verbose:
+            logger.info(f"Loading COCO format annotations from {labels_dir}")
+        # For COCO format, labels_dir is path to instances.json
+        # Labels are typically in a "labels" directory parallel to "annotations"
+        coco_root = os.path.dirname(os.path.dirname(labels_dir))  # Go up two levels
+        labels_directory = os.path.join(coco_root, "labels")
+        image_files, label_files = parse_coco_annotations(
+            labels_dir, images_dir, labels_directory
+        )
+    elif input_format.lower() == "yolo":
+        # Parse YOLO format annotations
+        if verbose:
+            logger.info(f"Loading YOLO format data from {images_dir}")
+        image_files, label_files = parse_yolo_annotations(images_dir)
+    else:
+        # Default: directory format
+        # Support multiple image formats: GeoTIFF, PNG, JPG, JPEG, TIF, TIFF
+        image_extensions = (".tif", ".tiff", ".png", ".jpg", ".jpeg")
+        label_extensions = (".tif", ".tiff", ".png", ".jpg", ".jpeg")
+
+>>>>>>> upstream/main
         image_files = sorted(
             [
                 os.path.join(images_dir, f)
@@ -2640,7 +4226,13 @@ def train_segmentation_model(
 
         # Ensure matching files
         if len(image_files) != len(label_files):
+<<<<<<< HEAD
             print("Warning: Number of image files and label files don't match!")
+=======
+            logger.warning(
+                "Warning: Number of image files and label files don't match!"
+            )
+>>>>>>> upstream/main
             # Find matching files by basename
             basenames = [os.path.basename(f) for f in image_files]
             label_files = [
@@ -2653,9 +4245,17 @@ def train_segmentation_model(
                 for f, b in zip(image_files, basenames)
                 if os.path.exists(os.path.join(labels_dir, b))
             ]
+<<<<<<< HEAD
             print(f"Using {len(image_files)} matching files")
 
     print(f"Found {len(image_files)} image files and {len(label_files)} label files")
+=======
+            logger.info(f"Using {len(image_files)} matching files")
+
+    logger.info(
+        f"Found {len(image_files)} image files and {len(label_files)} label files"
+    )
+>>>>>>> upstream/main
 
     if len(image_files) == 0:
         raise FileNotFoundError("No matching image and label files found")
@@ -2665,11 +4265,13 @@ def train_segmentation_model(
         image_files, label_files, test_size=val_split, random_state=seed
     )
 
-    print(f"Training on {len(train_imgs)} images, validating on {len(val_imgs)} images")
+    logger.info(
+        f"Training on {len(train_imgs)} images, validating on {len(val_imgs)} images"
+    )
 
     # Auto-detect image sizes and set target_size if needed
     if target_size is None:
-        print("Checking image sizes for compatibility...")
+        logger.info("Checking image sizes for compatibility...")
 
         # Sample a few images to check size consistency
         sample_images = train_imgs[: min(5, len(train_imgs))]
@@ -2685,30 +4287,32 @@ def train_segmentation_model(
                         width, height = img.size
                 image_sizes.append((height, width))
             except Exception as e:
-                print(f"Warning: Could not read image {img_path}: {e}")
+                logger.warning(f"Warning: Could not read image {img_path}: {e}")
                 continue
 
         # Check if all images have the same size
         if len(image_sizes) == 0:
-            print(
+            logger.info(
                 "Warning: Could not read any sample images. Setting target_size to (512, 512) as a safe default."
             )
             target_size = (512, 512)
         else:
             unique_sizes = set(image_sizes)
             if len(unique_sizes) > 1:
-                print(
+                logger.info(
                     f"Warning: Found images with different sizes: {list(unique_sizes)}"
                 )
-                print(
+                logger.info(
                     "Setting target_size to (512, 512) to standardize image dimensions."
                 )
-                print("This will resize all images to 512x512 pixels.")
-                print("To use a different size, set target_size parameter explicitly.")
+                logger.info("This will resize all images to 512x512 pixels.")
+                logger.info(
+                    "To use a different size, set target_size parameter explicitly."
+                )
                 target_size = (512, 512)
             else:
-                print(f"All sampled images have the same size: {image_sizes[0]}")
-                print("No resizing needed.")
+                logger.info(f"All sampled images have the same size: {image_sizes[0]}")
+                logger.info("No resizing needed.")
 
     # Create datasets
     # Use custom transforms if provided, otherwise use default transforms
@@ -2767,10 +4371,10 @@ def train_segmentation_model(
         )
 
         # Test the data loader by loading one batch to catch size mismatch errors early
-        print("Testing data loader...")
+        logger.info("Testing data loader...")
         try:
             next(iter(train_loader))
-            print("Data loader test passed.")
+            logger.info("Data loader test passed.")
         except RuntimeError as e:
             if "stack expects each tensor to be equal size" in str(e):
                 raise RuntimeError(
@@ -2807,11 +4411,29 @@ def train_segmentation_model(
 
     # Enable multi-GPU training if multiple GPUs are available
     if torch.cuda.device_count() > 1:
-        print(f"Using {torch.cuda.device_count()} GPUs for training")
+        logger.info(f"Using {torch.cuda.device_count()} GPUs for training")
         model = torch.nn.DataParallel(model)
 
+<<<<<<< HEAD
     # Set up loss function (CrossEntropyLoss for multi-class, can also use F1Loss)
     criterion = torch.nn.CrossEntropyLoss()
+=======
+    # Set up loss function
+    if loss_fn is not None:
+        criterion = loss_fn.to(device)
+    elif class_weights is not None:
+        if len(class_weights) != num_classes:
+            raise ValueError(
+                f"class_weights length ({len(class_weights)}) must match "
+                f"num_classes ({num_classes})"
+            )
+        weight_tensor = torch.tensor(class_weights, dtype=torch.float32).to(device)
+        criterion = torch.nn.CrossEntropyLoss(
+            weight=weight_tensor, ignore_index=ignore_index
+        )
+    else:
+        criterion = torch.nn.CrossEntropyLoss(ignore_index=ignore_index)
+>>>>>>> upstream/main
 
     # Set up optimizer
     optimizer = torch.optim.Adam(
@@ -2839,7 +4461,7 @@ def train_segmentation_model(
         if not os.path.exists(checkpoint_path):
             raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
 
-        print(f"Loading checkpoint from: {checkpoint_path}")
+        logger.info(f"Loading checkpoint from: {checkpoint_path}")
         try:
             checkpoint = torch.load(checkpoint_path, map_location=device)
 
@@ -2877,22 +4499,24 @@ def train_segmentation_model(
                     if "val_recalls" in checkpoint:
                         val_recalls = checkpoint["val_recalls"]
 
-                    print(f"Resuming training from epoch {start_epoch}")
-                    print(f"Previous best IoU: {best_iou:.4f}")
+                    logger.info(f"Resuming training from epoch {start_epoch}")
+                    logger.info(f"Previous best IoU: {best_iou:.4f}")
                 else:
-                    print("Loaded model weights only (not resuming training state)")
+                    logger.info(
+                        "Loaded model weights only (not resuming training state)"
+                    )
             else:
                 # Assume it's just model weights
                 model.load_state_dict(checkpoint)
-                print("Loaded model weights only")
+                logger.info("Loaded model weights only")
 
         except Exception as e:
             raise RuntimeError(f"Failed to load checkpoint: {str(e)}")
 
-    print(f"Starting training with {architecture} + {encoder_name}")
-    print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
+    logger.info(f"Starting training with {architecture} + {encoder_name}")
+    logger.info(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
     if start_epoch > 0:
-        print(f"Resuming from epoch {start_epoch}/{num_epochs}")
+        logger.info(f"Resuming from epoch {start_epoch}/{num_epochs}")
 
     # Training loop
     for epoch in range(start_epoch, num_epochs):
@@ -2923,7 +4547,7 @@ def train_segmentation_model(
         lr_scheduler.step(eval_metrics["loss"])
 
         # Print metrics
-        print(
+        logger.info(
             f"Epoch {epoch+1}/{num_epochs}: "
             f"Train Loss: {train_loss:.4f}, "
             f"Val Loss: {eval_metrics['loss']:.4f}, "
@@ -2937,7 +4561,11 @@ def train_segmentation_model(
         if eval_metrics["IoU"] > best_iou:
             best_iou = eval_metrics["IoU"]
             epochs_without_improvement = 0
+<<<<<<< HEAD
             print(f"Saving best model with IoU: {best_iou:.4f}")
+=======
+            logger.info(f"Saving best model with IoU: {best_iou:.4f}")
+>>>>>>> upstream/main
             torch.save(model.state_dict(), os.path.join(output_dir, "best_model.pth"))
         else:
             epochs_without_improvement += 1
@@ -2945,10 +4573,17 @@ def train_segmentation_model(
                 early_stopping_patience is not None
                 and epochs_without_improvement >= early_stopping_patience
             ):
+<<<<<<< HEAD
                 print(
                     f"\nEarly stopping triggered after {epochs_without_improvement} epochs without improvement"
                 )
                 print(f"Best validation IoU: {best_iou:.4f}")
+=======
+                logger.info(
+                    f"\nEarly stopping triggered after {epochs_without_improvement} epochs without improvement"
+                )
+                logger.info(f"Best validation IoU: {best_iou:.4f}")
+>>>>>>> upstream/main
                 break
 
         # Save checkpoint every 10 epochs (if not save_best_only)
@@ -3005,8 +4640,8 @@ def train_segmentation_model(
         f.write(f"Final validation Recall: {val_recalls[-1]:.4f}\n")
         f.write(f"Final validation loss: {val_losses[-1]:.4f}\n")
 
-    print(f"Training complete! Best IoU: {best_iou:.4f}")
-    print(f"Models saved to {output_dir}")
+    logger.info(f"Training complete! Best IoU: {best_iou:.4f}")
+    logger.info(f"Models saved to {output_dir}")
 
     # Plot training curves
     if plot_curves:
@@ -3044,12 +4679,12 @@ def train_segmentation_model(
                 dpi=150,
                 bbox_inches="tight",
             )
-            print(
+            logger.info(
                 f"Training curves saved to {os.path.join(output_dir, 'training_curves.png')}"
             )
             plt.close()
         except Exception as e:
-            print(f"Could not save training curves: {e}")
+            logger.info(f"Could not save training curves: {e}")
 
 
 def semantic_inference_on_geotiff(
@@ -3125,7 +4760,7 @@ def semantic_inference_on_geotiff(
 
         total_windows = steps_y * steps_x
         if not quiet:
-            print(f"Processing {total_windows} windows...")
+            logger.info(f"Processing {total_windows} windows...")
 
         if not quiet:
             pbar = tqdm(total=total_windows)
@@ -3265,7 +4900,11 @@ def semantic_inference_on_geotiff(
                     normalized_probs[1, valid_pixels] >= probability_threshold
                 ).astype(np.uint8)
                 if not quiet:
+<<<<<<< HEAD
                     print(f"Using probability threshold: {probability_threshold}")
+=======
+                    logger.info(f"Using probability threshold: {probability_threshold}")
+>>>>>>> upstream/main
             else:
                 # Take argmax to get final class predictions
                 mask[valid_pixels] = np.argmax(
@@ -3278,13 +4917,13 @@ def semantic_inference_on_geotiff(
             )
             bg_ratio = np.sum(mask == 0) / mask.size
             if not quiet:
-                print(
+                logger.info(
                     f"Predicted classes: {len(unique_classes)} classes, Background: {bg_ratio:.1%}"
                 )
 
         inference_time = time.time() - start_time
         if not quiet:
-            print(f"Inference completed in {inference_time:.2f} seconds")
+            logger.info(f"Inference completed in {inference_time:.2f} seconds")
 
         # Save output
         out_dir = os.path.abspath(os.path.dirname(output_path))
@@ -3293,7 +4932,60 @@ def semantic_inference_on_geotiff(
             dst.write(mask, 1)
 
         if not quiet:
-            print(f"Saved prediction to {output_path}")
+            logger.info(f"Saved prediction to {output_path}")
+
+        # Save probability map if requested
+        if probability_path is not None:
+            prob_dir = os.path.abspath(os.path.dirname(probability_path))
+            os.makedirs(prob_dir, exist_ok=True)
+
+            # Prepare probability output metadata
+            prob_meta = meta.copy()
+            prob_meta.update({"count": num_classes, "dtype": "float32"})
+
+            # Save normalized probabilities as multi-band raster
+            with rasterio.open(probability_path, "w", **prob_meta) as dst:
+                for class_idx in range(num_classes):
+                    # Normalize probabilities
+                    prob_band = np.zeros((height, width), dtype=np.float32)
+                    prob_band[valid_pixels] = (
+                        prob_accumulator[class_idx, valid_pixels]
+                        / count_accumulator[valid_pixels]
+                    )
+                    dst.write(prob_band, class_idx + 1)
+
+            if not quiet:
+                logger.info(f"Saved probability map to {probability_path}")
+
+            # Save individual class probabilities if requested
+            if save_class_probabilities:
+                # Prepare single-band metadata
+                single_band_meta = meta.copy()
+                single_band_meta.update({"count": 1, "dtype": "float32"})
+
+                # Get base filename and extension
+                prob_base = os.path.splitext(probability_path)[0]
+                prob_ext = os.path.splitext(probability_path)[1]
+
+                for class_idx in range(num_classes):
+                    # Create filename for this class
+                    class_prob_path = f"{prob_base}_class_{class_idx}{prob_ext}"
+
+                    # Normalize probabilities
+                    prob_band = np.zeros((height, width), dtype=np.float32)
+                    prob_band[valid_pixels] = (
+                        prob_accumulator[class_idx, valid_pixels]
+                        / count_accumulator[valid_pixels]
+                    )
+
+                    # Save single-band file
+                    with rasterio.open(class_prob_path, "w", **single_band_meta) as dst:
+                        dst.write(prob_band, 1)
+
+                    if not quiet:
+                        logger.info(
+                            f"Saved class {class_idx} probability to {class_prob_path}"
+                        )
 
         # Save probability map if requested
         if probability_path is not None:
@@ -3418,7 +5110,7 @@ def semantic_inference_on_image(
         img_array = np.transpose(img_array, (2, 0, 1))
 
         if not quiet:
-            print(f"Processing image: {width}x{height}")
+            logger.info(f"Processing image: {width}x{height}")
 
         # Initialize accumulator arrays for multi-class probability blending
         prob_accumulator = np.zeros((num_classes, height, width), dtype=np.float32)
@@ -3432,7 +5124,7 @@ def semantic_inference_on_image(
 
         total_windows = steps_y * steps_x
         if not quiet:
-            print(f"Processing {total_windows} windows...")
+            logger.info(f"Processing {total_windows} windows...")
 
         if not quiet:
             pbar = tqdm(total=total_windows)
@@ -3582,7 +5274,11 @@ def semantic_inference_on_image(
                     normalized_probs[1, valid_pixels] >= probability_threshold
                 ).astype(np.uint8)
                 if not quiet:
+<<<<<<< HEAD
                     print(f"Using probability threshold: {probability_threshold}")
+=======
+                    logger.info(f"Using probability threshold: {probability_threshold}")
+>>>>>>> upstream/main
             else:
                 # Take argmax to get final class predictions
                 mask[valid_pixels] = np.argmax(
@@ -3596,7 +5292,7 @@ def semantic_inference_on_image(
                 int(cls): int(count) for cls, count in zip(unique_classes, class_counts)
             }
             if not quiet:
-                print(f"Raw predicted classes and counts: {class_distribution}")
+                logger.info(f"Raw predicted classes and counts: {class_distribution}")
 
             # Convert to binary if requested and num_classes == 2
             if binary_output and num_classes == 2:
@@ -3614,11 +5310,13 @@ def semantic_inference_on_image(
                     for cls, count in zip(unique_classes, class_counts)
                 }
                 if not quiet:
-                    print(f"Binary predicted classes and counts: {binary_distribution}")
+                    logger.info(
+                        f"Binary predicted classes and counts: {binary_distribution}"
+                    )
 
         inference_time = time.time() - start_time
         if not quiet:
-            print(f"Inference completed in {inference_time:.2f} seconds")
+            logger.info(f"Inference completed in {inference_time:.2f} seconds")
 
         # Save output as image
         # For binary masks, use PNG to avoid JPEG compression artifacts
@@ -3630,19 +5328,88 @@ def semantic_inference_on_image(
             os.makedirs(out_dir, exist_ok=True)
             output_img.save(output_path_png)
             if not quiet:
-                print(
+                logger.info(
                     f"Saved binary prediction to {output_path_png} (PNG format to preserve exact values)"
                 )
 
             # Also save the original requested format for compatibility
             if output_path != output_path_png:
                 output_img.save(output_path)
-                print(f"Also saved to {output_path} (may have compression artifacts)")
+                logger.info(
+                    f"Also saved to {output_path} (may have compression artifacts)"
+                )
         else:
             output_img = Image.fromarray(mask, mode="L")
             output_img.save(output_path)
             if not quiet:
-                print(f"Saved prediction to {output_path}")
+                logger.info(f"Saved prediction to {output_path}")
+
+        # Save probability map if requested
+        if probability_path is not None:
+            prob_dir = os.path.abspath(os.path.dirname(probability_path))
+            os.makedirs(prob_dir, exist_ok=True)
+
+            # For regular images, we'll save as a multi-channel TIFF
+            # since we need to preserve floating point values
+            import rasterio
+            from rasterio.transform import from_bounds
+
+            # Create a simple affine transform (identity transform for pixel coordinates)
+            transform = from_bounds(0, 0, width, height, width, height)
+
+            # Prepare probability output metadata
+            prob_meta = {
+                "driver": "GTiff",
+                "height": height,
+                "width": width,
+                "count": num_classes,
+                "dtype": "float32",
+                "transform": transform,
+            }
+
+            # Save normalized probabilities as multi-band raster
+            with rasterio.open(probability_path, "w", **prob_meta) as dst:
+                for class_idx in range(num_classes):
+                    # Normalize probabilities
+                    prob_band = np.zeros((height, width), dtype=np.float32)
+                    prob_band[valid_pixels] = normalized_probs[class_idx, valid_pixels]
+                    dst.write(prob_band, class_idx + 1)
+
+            if not quiet:
+                logger.info(f"Saved probability map to {probability_path}")
+
+            # Save individual class probabilities if requested
+            if save_class_probabilities:
+                # Prepare single-band metadata
+                single_band_meta = {
+                    "driver": "GTiff",
+                    "height": height,
+                    "width": width,
+                    "count": 1,
+                    "dtype": "float32",
+                    "transform": transform,
+                }
+
+                # Get base filename and extension
+                prob_base = os.path.splitext(probability_path)[0]
+                prob_ext = os.path.splitext(probability_path)[1]
+
+                for class_idx in range(num_classes):
+                    # Create filename for this class
+                    class_prob_path = f"{prob_base}_class_{class_idx}{prob_ext}"
+
+                    # Normalize probabilities
+                    prob_band = np.zeros((height, width), dtype=np.float32)
+                    prob_band[valid_pixels] = normalized_probs[class_idx, valid_pixels]
+
+                    # Save single-band file
+                    with rasterio.open(class_prob_path, "w", **single_band_meta) as dst:
+                        dst.write(prob_band, 1)
+
+                    if not quiet:
+                        logger.info(
+                            f"Saved class {class_idx} probability to {class_prob_path}"
+                        )
 
         # Save probability map if requested
         if probability_path is not None:
@@ -3781,7 +5548,7 @@ def semantic_segmentation(
     }
 
     if not quiet:
-        print(
+        logger.info(
             f"Input file format: {formats[input_ext] if is_geotiff else 'Regular image'} ({input_ext})"
         )
 
@@ -3936,7 +5703,7 @@ def semantic_segmentation_batch(
     if len(image_files) == 0:
         raise FileNotFoundError(f"No supported image files found in {input_dir}")
 
-    print(f"Found {len(image_files)} image files to process")
+    logger.info(f"Found {len(image_files)} image files to process")
 
     # Load model once for all images
     model = get_smp_model(
@@ -3991,7 +5758,7 @@ def semantic_segmentation_batch(
 
     # Process each image
     for i, (input_path, output_path) in enumerate(zip(image_files, filenames)):
-        print(
+        logger.info(
             f"Processing file {i + 1}/{len(image_files)}: {os.path.basename(input_path)}"
         )
 
@@ -4031,10 +5798,10 @@ def semantic_segmentation_batch(
                     **kwargs,
                 )
         except Exception as e:
-            print(f"Error processing {input_path}: {str(e)}")
+            logger.error(f"Error processing {input_path}: {str(e)}")
             continue
 
-    print(f"Batch processing completed. Results saved to {output_dir}")
+    logger.info(f"Batch processing completed. Results saved to {output_dir}")
 
 
 def train_instance_segmentation_model(
@@ -4052,6 +5819,8 @@ def train_instance_segmentation_model(
     visualize: bool = False,
     device: Optional[torch.device] = None,
     verbose: bool = True,
+    instance_labels: bool = False,
+    multiclass: bool = False,
     **kwargs: Any,
 ) -> torch.nn.Module:
     """
@@ -4081,6 +5850,18 @@ def train_instance_segmentation_model(
         visualize (bool): Whether to generate visualizations. Defaults to False.
         device (torch.device): Device to train on. If None, uses CUDA if available.
         verbose (bool): If True, prints detailed training progress. Defaults to True.
+        instance_labels (bool): If True, treat label mask pixel values as
+            pre-assigned instance IDs instead of running connected-component
+            labeling. Use this when label masks already encode unique integers
+            per object (e.g., Fields of The World dataset). Defaults to False.
+        multiclass (bool): If True (and ``input_format='directory'``), read
+            per-instance class IDs from the label mask pixel values using
+            per-class connected-component labeling. Recommended for
+            multi-class training with ``num_classes > 2`` when using the
+            directory input format. If left False with ``num_classes > 2``
+            in directory mode, every target is silently assigned label ``1``
+            and the model will only learn the first foreground class; a
+            warning is emitted in that case. Defaults to False.
         **kwargs: Additional arguments passed to train_MaskRCNN_model.
 
     Returns:
@@ -4106,6 +5887,8 @@ def train_instance_segmentation_model(
         visualize=visualize,
         device=device,
         verbose=verbose,
+        instance_labels=instance_labels,
+        multiclass=multiclass,
         **kwargs,
     )
 
@@ -4117,33 +5900,77 @@ def instance_segmentation(
     window_size: int = 512,
     overlap: int = 256,
     confidence_threshold: float = 0.5,
+    nms_threshold: float = 0.3,
     batch_size: int = 4,
     num_channels: int = 3,
     num_classes: int = 2,
+    class_names: Optional[List[str]] = None,
+    vectorize: bool = False,
+    vector_path: Optional[str] = None,
+    use_mask_geometry: bool = True,
+    simplify_tolerance: float = 0.0,
     device: Optional[torch.device] = None,
     **kwargs: Any,
-) -> None:
+) -> Dict[str, Any]:
     """
-    Perform instance segmentation on a GeoTIFF using a pre-trained Mask R-CNN model.
+    Perform instance segmentation on a GeoTIFF using a pre-trained Mask
+    R-CNN model.
 
-    This is a wrapper function for object_detection with clearer naming.
+    Saves three raster files (instance IDs, class labels, confidence scores)
+    and optionally a vector file with polygon geometries and attributes.
 
     Args:
         input_path (str): Path to input GeoTIFF file.
-        output_path (str): Path to save output mask GeoTIFF.
+        output_path (str): Path to save the instance ID raster. Class and
+            score rasters are saved alongside with ``_class`` and ``_score``
+            suffixes.
         model_path (str): Path to trained model weights.
-        window_size (int): Size of sliding window for inference. Defaults to 512.
+        window_size (int): Size of sliding window for inference. Defaults
+            to 512.
         overlap (int): Overlap between adjacent windows. Defaults to 256.
-        confidence_threshold (float): Confidence threshold for predictions (0-1). Defaults to 0.5.
+        confidence_threshold (float): Confidence threshold for predictions
+            (0-1). Defaults to 0.5.
+        nms_threshold (float): IoU threshold for non-maximum suppression.
+            Defaults to 0.3.
         batch_size (int): Batch size for inference. Defaults to 4.
-        num_channels (int): Number of channels in the input image and model. Defaults to 3.
-        num_classes (int): Number of classes (including background). Defaults to 2.
-        device (torch.device): Device to run inference on. If None, uses CUDA if available.
-        **kwargs: Additional arguments passed to object_detection.
+        num_channels (int): Number of channels in the input image and model.
+            Defaults to 3.
+        num_classes (int): Number of classes (including background).
+            Defaults to 2.
+        class_names (list, optional): List of class names where index 0 is
+            the background class. Used for the vector output class_name
+            attribute.
+        vectorize (bool): If True, convert detections to a vector file with
+            polygon geometries and attributes (geometry, class_id,
+            class_name, score, instance_id, area_pixels). Defaults to False.
+        vector_path (str, optional): Path to save the vector output. If None
+            and vectorize is True, derives the path from output_path with a
+            ``.gpkg`` extension.
+        use_mask_geometry (bool): If True, use the instance mask polygons as
+            geometry. If False, use bounding box rectangles. Only used when
+            vectorize is True. Defaults to True.
+        simplify_tolerance (float): Tolerance for polygon simplification in
+            georeferenced units. Only used when vectorize is True and
+            use_mask_geometry is True. Defaults to 0.0.
+        device (torch.device): Device to run inference on. If None, uses
+            CUDA if available.
+        **kwargs: Additional arguments passed to
+            instance_segmentation_inference_on_geotiff.
 
     Returns:
-        None: Output mask is saved to output_path.
+        dict: Dictionary with keys:
+            - instance (str): Path to the instance ID raster.
+            - class_label (str): Path to the class label raster.
+            - score (str): Path to the confidence score raster.
+            - vector (str or None): Path to the vector file, if vectorize
+              is True.
+            - inference_time (float): Inference time in seconds.
+            - detections (list): List of detection dicts with keys: mask
+              (window-sized np.ndarray), mask_offset (tuple of y, x, h, w),
+              score, box, label, instance_id.
     """
+    from .object_detect import detections_to_geodataframe
+
     # Create model with the specified number of classes
     model = get_instance_segmentation_model(
         num_classes=num_classes, num_channels=num_channels, pretrained=True
@@ -4165,19 +5992,50 @@ def instance_segmentation(
     model.load_state_dict(state_dict)
     model.to(device)
 
-    # Use the proper instance segmentation inference function
-    return instance_segmentation_inference_on_geotiff(
-        model=model,
-        geotiff_path=input_path,
-        output_path=output_path,
-        window_size=window_size,
-        overlap=overlap,
-        confidence_threshold=confidence_threshold,
-        batch_size=batch_size,
-        num_channels=num_channels,
-        device=device,
-        **kwargs,
+    # Run inference
+    output_paths, inference_time, detections = (
+        instance_segmentation_inference_on_geotiff(
+            model=model,
+            geotiff_path=input_path,
+            output_path=output_path,
+            window_size=window_size,
+            overlap=overlap,
+            confidence_threshold=confidence_threshold,
+            nms_threshold=nms_threshold,
+            batch_size=batch_size,
+            num_channels=num_channels,
+            device=device,
+            **kwargs,
+        )
     )
+
+    result = {
+        "instance": output_paths["instance"],
+        "class_label": output_paths["class_label"],
+        "score": output_paths["score"],
+        "vector": None,
+        "inference_time": inference_time,
+        "detections": detections,
+    }
+
+    # Optionally create vector output
+    if vectorize and len(detections) > 0:
+        if vector_path is None:
+            base, _ = os.path.splitext(output_path)
+            vector_path = f"{base}.gpkg"
+
+        gdf = detections_to_geodataframe(
+            detections=detections,
+            geotiff_path=input_path,
+            class_names=class_names,
+            use_mask_geometry=use_mask_geometry,
+            simplify_tolerance=simplify_tolerance,
+        )
+        gdf.to_file(vector_path, driver="GPKG")
+        result["vector"] = vector_path
+        logger.info(f"Saved vector output to {vector_path}")
+
+    return result
 
 
 def instance_segmentation_batch(
@@ -4187,6 +6045,7 @@ def instance_segmentation_batch(
     window_size: int = 512,
     overlap: int = 256,
     confidence_threshold: float = 0.5,
+    nms_threshold: float = 0.3,
     batch_size: int = 4,
     num_channels: int = 3,
     num_classes: int = 2,
@@ -4194,9 +6053,8 @@ def instance_segmentation_batch(
     **kwargs: Any,
 ) -> None:
     """
-    Perform instance segmentation on multiple GeoTIFF files using a pre-trained Mask R-CNN model.
-
-    This is a wrapper function for object_detection_batch with clearer naming.
+    Perform instance segmentation on multiple GeoTIFF files using a pre-trained
+    Mask R-CNN model.
 
     Args:
         input_dir (str): Directory containing input GeoTIFF files.
@@ -4204,12 +6062,19 @@ def instance_segmentation_batch(
         model_path (str): Path to trained model weights.
         window_size (int): Size of sliding window for inference. Defaults to 512.
         overlap (int): Overlap between adjacent windows. Defaults to 256.
-        confidence_threshold (float): Confidence threshold for predictions (0-1). Defaults to 0.5.
+        confidence_threshold (float): Confidence threshold for predictions
+            (0-1). Defaults to 0.5.
+        nms_threshold (float): IoU threshold for non-maximum suppression.
+            Defaults to 0.3.
         batch_size (int): Batch size for inference. Defaults to 4.
-        num_channels (int): Number of channels in the input image and model. Defaults to 3.
-        num_classes (int): Number of classes (including background). Defaults to 2.
-        device (torch.device): Device to run inference on. If None, uses CUDA if available.
-        **kwargs: Additional arguments passed to object_detection_batch.
+        num_channels (int): Number of channels in the input image and model.
+            Defaults to 3.
+        num_classes (int): Number of classes (including background).
+            Defaults to 2.
+        device (torch.device): Device to run inference on. If None, uses
+            CUDA if available.
+        **kwargs: Additional arguments passed to
+            instance_segmentation_inference_on_geotiff.
 
     Returns:
         None: Output masks are saved to output_dir.
@@ -4243,13 +6108,13 @@ def instance_segmentation_batch(
     )
 
     if not input_files:
-        print(f"No GeoTIFF files found in {input_dir}")
+        logger.info(f"No GeoTIFF files found in {input_dir}")
         return
 
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
 
-    print(f"Processing {len(input_files)} files...")
+    logger.info(f"Processing {len(input_files)} files...")
 
     for input_file in input_files:
         try:
@@ -4257,7 +6122,7 @@ def instance_segmentation_batch(
             base_name = os.path.splitext(os.path.basename(input_file))[0]
             output_file = os.path.join(output_dir, f"{base_name}_instances.tif")
 
-            print(f"Processing {input_file}...")
+            logger.info(f"Processing {input_file}...")
 
             # Run instance segmentation inference
             instance_segmentation_inference_on_geotiff(
@@ -4267,19 +6132,24 @@ def instance_segmentation_batch(
                 window_size=window_size,
                 overlap=overlap,
                 confidence_threshold=confidence_threshold,
+                nms_threshold=nms_threshold,
                 batch_size=batch_size,
                 num_channels=num_channels,
                 device=device,
                 **kwargs,
             )
 
-            print(f"Saved result to {output_file}")
+            logger.info(f"Saved result to {output_file}")
 
         except Exception as e:
-            print(f"Error processing {input_file}: {str(e)}")
+            logger.error(f"Error processing {input_file}: {str(e)}")
             continue
 
+<<<<<<< HEAD
     print(f"Batch processing completed. Results saved to {output_dir}")
+=======
+    logger.info(f"Batch processing completed. Results saved to {output_dir}")
+>>>>>>> upstream/main
 
 
 def lightly_train_model(
@@ -4372,9 +6242,15 @@ def lightly_train_model(
             f"For ViT models, use 'dinov2', 'dinov2_distillation', or 'dino'."
         )
 
+<<<<<<< HEAD
     print(f"Found {len(image_files)} images in {data_dir}")
     print(f"Starting self-supervised pretraining with {method} method...")
     print(f"Model: {model}")
+=======
+    logger.info(f"Found {len(image_files)} images in {data_dir}")
+    logger.info(f"Starting self-supervised pretraining with {method} method...")
+    logger.info(f"Model: {model}")
+>>>>>>> upstream/main
 
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
@@ -4417,7 +6293,11 @@ def lightly_train_model(
     )
 
     if os.path.exists(exported_model_path):
+<<<<<<< HEAD
         print(
+=======
+        logger.info(
+>>>>>>> upstream/main
             f"Model training completed. Exported model saved to: {exported_model_path}"
         )
         return exported_model_path
@@ -4430,10 +6310,19 @@ def lightly_train_model(
 
         for path in possible_paths:
             if os.path.exists(path):
+<<<<<<< HEAD
                 print(f"Model training completed. Exported model saved to: {path}")
                 return path
 
         print(f"Model training completed. Output saved to: {output_dir}")
+=======
+                logger.info(
+                    f"Model training completed. Exported model saved to: {path}"
+                )
+                return path
+
+        logger.info(f"Model training completed. Output saved to: {output_dir}")
+>>>>>>> upstream/main
         return output_dir
 
 
@@ -4469,7 +6358,11 @@ def load_lightly_pretrained_model(
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path}")
 
+<<<<<<< HEAD
     print(f"Loading pretrained model from: {model_path}")
+=======
+    logger.info(f"Loading pretrained model from: {model_path}")
+>>>>>>> upstream/main
 
     # Load the model based on architecture
     if model_architecture.startswith("torchvision/"):
@@ -4507,7 +6400,11 @@ def load_lightly_pretrained_model(
         state_dict = torch.load(model_path, map_location=device)
     model.load_state_dict(state_dict)
 
+<<<<<<< HEAD
     print(f"Successfully loaded pretrained model: {model_architecture}")
+=======
+    logger.info(f"Successfully loaded pretrained model: {model_architecture}")
+>>>>>>> upstream/main
     return model
 
 
@@ -4565,8 +6462,13 @@ def lightly_embed_images(
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file does not exist: {model_path}")
 
+<<<<<<< HEAD
     print(f"Generating embeddings for images in: {data_dir}")
     print(f"Using pretrained model: {model_path}")
+=======
+    logger.info(f"Generating embeddings for images in: {data_dir}")
+    logger.info(f"Using pretrained model: {model_path}")
+>>>>>>> upstream/main
 
     output_dir = os.path.dirname(output_path)
     if output_dir:
@@ -4582,5 +6484,9 @@ def lightly_embed_images(
         **kwargs,
     )
 
+<<<<<<< HEAD
     print(f"Embeddings saved to: {output_path}")
+=======
+    logger.info(f"Embeddings saved to: {output_path}")
+>>>>>>> upstream/main
     return output_path

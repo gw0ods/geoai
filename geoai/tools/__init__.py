@@ -27,7 +27,11 @@ try:
             "check_multiclean_available",
         ]
     )
+<<<<<<< HEAD
 except ImportError:
+=======
+except (ImportError, OSError):
+>>>>>>> upstream/main
     # MultiClean not installed - functions will not be available
     pass
 
@@ -60,17 +64,71 @@ try:
             "CLOUD_SHADOW",
         ]
     )
+<<<<<<< HEAD
 except ImportError:
     # OmniCloudMask not installed - functions will not be available
+=======
+except (ImportError, OSError):
+    # OmniCloudMask not installed or torch DLL load failure
+>>>>>>> upstream/main
     pass
 
 
 # Super Resolution integration (optional dependency)
 
 try:
+<<<<<<< HEAD
     from .sr import super_resolution
 
     __all__.extend(["super_resolution"])
 except ImportError:
     # Super resolution not installed - function will not be available
+=======
+    from .sr import super_resolution, plot_sr_comparison, plot_sr_uncertainty
+
+    __all__.extend(["super_resolution", "plot_sr_comparison", "plot_sr_uncertainty"])
+except (ImportError, OSError):
+    # Super resolution not installed or torch DLL load failure
+    pass
+
+# Time-series analysis utilities (rasterio required)
+try:
+    from .timeseries import (
+        validate_temporal_stack,
+        create_temporal_composite,
+        create_cloud_free_composite,
+        calculate_spectral_index_timeseries,
+        detect_change,
+        calculate_temporal_statistics,
+        extract_dates_from_filenames,
+        sort_by_date,
+        COMPOSITE_METHODS,
+        SPECTRAL_INDICES,
+        CHANGE_METHODS,
+        TEMPORAL_STATISTICS,
+        SENTINEL2_DATE_PATTERN,
+        LANDSAT_DATE_PATTERN,
+    )
+
+    __all__.extend(
+        [
+            "validate_temporal_stack",
+            "create_temporal_composite",
+            "create_cloud_free_composite",
+            "calculate_spectral_index_timeseries",
+            "detect_change",
+            "calculate_temporal_statistics",
+            "extract_dates_from_filenames",
+            "sort_by_date",
+            "COMPOSITE_METHODS",
+            "SPECTRAL_INDICES",
+            "CHANGE_METHODS",
+            "TEMPORAL_STATISTICS",
+            "SENTINEL2_DATE_PATTERN",
+            "LANDSAT_DATE_PATTERN",
+        ]
+    )
+except (ImportError, OSError):
+    # rasterio not installed - time-series functions will not be available
+>>>>>>> upstream/main
     pass

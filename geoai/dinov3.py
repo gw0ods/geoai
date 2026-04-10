@@ -5,11 +5,17 @@ on geospatial imagery stored in GeoTIFF format.
 """
 
 import json
+import logging
 import math
 import os
 import sys
 from typing import Dict, List, Optional, Tuple, Union
 
+<<<<<<< HEAD
+=======
+logger = logging.getLogger(__name__)
+
+>>>>>>> upstream/main
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
@@ -113,8 +119,10 @@ class DINOv3GeoProcessor:
             return model_path
 
         except Exception as e:
-            print(f"Error downloading model from Hugging Face: {e}")
-            print("Please specify a local model path or ensure internet connectivity.")
+            logger.error("Error downloading model from Hugging Face: %s", e)
+            logger.error(
+                "Please specify a local model path or ensure internet connectivity."
+            )
             raise
 
     def _load_model(self, weights_path: Optional[str] = None) -> torch.nn.Module:

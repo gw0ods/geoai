@@ -18,12 +18,44 @@ Author: ValHab Project
 Date: November 2025
 """
 
+<<<<<<< HEAD
+=======
+import logging
+>>>>>>> upstream/main
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+<<<<<<< HEAD
+=======
+logger = logging.getLogger(__name__)
+
+
+def _one_hot_with_ignore(
+    targets: torch.Tensor, num_classes: int, ignore_index: int = -100
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Convert class-index targets to one-hot encoding, masking ignored pixels.
+
+    Args:
+        targets: Ground truth tensor of shape (N, H, W) with class indices.
+        num_classes: Number of classes.
+        ignore_index: Target value that should be ignored.
+
+    Returns:
+        Tuple of (one_hot, valid_mask) where one_hot has shape (N, C, H, W)
+        and valid_mask has shape (N, H, W).
+    """
+    valid_mask = targets != ignore_index
+    safe_targets = targets.clone()
+    safe_targets[~valid_mask] = 0
+    one_hot = F.one_hot(safe_targets, num_classes)  # (N, H, W, C)
+    one_hot = one_hot.permute(0, 3, 1, 2).float()  # (N, C, H, W)
+    one_hot = one_hot * valid_mask.unsqueeze(1)
+    return one_hot, valid_mask
+
+>>>>>>> upstream/main
 
 class FocalLoss(nn.Module):
     """
@@ -94,8 +126,13 @@ class LandcoverCrossEntropyLoss(nn.Module):
 
     Args:
         weight: Manual rescaling weight given to each class
+<<<<<<< HEAD
         ignore_index: Specifies a target value that is ignored (default: None)
             - None: No values ignored (standard behavior)
+=======
+        ignore_index: Specifies a target value that is ignored.
+            - False: No values ignored (standard behavior)
+>>>>>>> upstream/main
             - int: Specific class index to ignore (e.g., 0 for background)
         reduction: Specifies the reduction to apply ('mean', 'sum', 'none')
     """
@@ -103,12 +140,21 @@ class LandcoverCrossEntropyLoss(nn.Module):
     def __init__(
         self,
         weight: Optional[torch.Tensor] = None,
+<<<<<<< HEAD
         ignore_index: Optional[int] = None,
+=======
+        ignore_index: Union[int, bool] = False,
+>>>>>>> upstream/main
         reduction: str = "mean",
     ):
         super().__init__()
         self.weight = weight
+<<<<<<< HEAD
         self.ignore_index = ignore_index if ignore_index is not None else -100
+=======
+        # Convert ignore_index: int stays as-is, False becomes -100 (PyTorch default)
+        self.ignore_index = ignore_index if isinstance(ignore_index, int) else -100
+>>>>>>> upstream/main
         self.reduction = reduction
 
     def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
@@ -131,22 +177,311 @@ class LandcoverCrossEntropyLoss(nn.Module):
         )
 
 
+<<<<<<< HEAD
+=======
+class DiceLoss(nn.Module):
+    """Dice loss for semantic segmentation.
+
+    Computes the Sørensen–Dice coefficient between predictions and targets,
+    which measures region overlap. Effective for class-imbalanced datasets
+    because it evaluates per-class overlap rather than per-pixel accuracy.
+
+    Args:
+        smooth: Smoothing constant to avoid division by zero.
+        ignore_index: Target value that is ignored and does not contribute
+            to the loss.
+        reduction: Reduction to apply: ``"mean"`` averages per-class losses,
+            ``"sum"`` sums them.
+        weight: Optional per-class weights tensor of shape ``(C,)``.
+    """
+
+    def __init__(
+        self,
+        smooth: float = 1.0,
+        ignore_index: int = -100,
+        reduction: str = "mean",
+        weight: Optional[torch.Tensor] = None,
+    ):
+        super().__init__()
+        self.smooth = smooth
+        self.ignore_index = ignore_index
+        self.reduction = reduction
+        self.weight = weight
+
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        """Compute Dice loss.
+
+        Args:
+            inputs: Predictions of shape ``(N, C, H, W)`` (logits).
+            targets: Ground truth of shape ``(N, H, W)`` with class indices.
+
+        Returns:
+            Scalar loss when ``reduction`` is ``"mean"`` or ``"sum"``,
+            or a per-class tensor of shape ``(C,)`` when ``"none"``.
+        """
+        num_classes = inputs.shape[1]
+        one_hot, valid_mask = _one_hot_with_ignore(
+            targets, num_classes, self.ignore_index
+        )
+        probs = F.softmax(inputs, dim=1)
+        probs = probs * valid_mask.unsqueeze(1)  # zero out ignored pixels
+
+        dims = (0, 2, 3)  # reduce over batch and spatial dims
+        intersection = (probs * one_hot).sum(dim=dims)
+        cardinality = probs.sum(dim=dims) + one_hot.sum(dim=dims)
+        dice = (2.0 * intersection + self.smooth) / (cardinality + self.smooth)
+        loss = 1.0 - dice  # (C,)
+
+        if self.weight is not None:
+            w = self.weight.to(loss.device)
+            loss = loss * w
+
+        if self.reduction == "mean":
+            return loss.mean()
+        elif self.reduction == "sum":
+            return loss.sum()
+        elif self.reduction == "none":
+            return loss
+        raise ValueError(f"Unknown reduction: {self.reduction!r}")
+
+
+class TverskyLoss(nn.Module):
+    """Tversky loss for semantic segmentation.
+
+    Generalises the Dice loss by allowing asymmetric weighting of false
+    positives and false negatives.  Setting ``alpha = beta = 0.5`` recovers
+    the standard Dice loss.  Increasing ``beta`` relative to ``alpha``
+    penalises false negatives more, which improves recall on rare classes.
+
+    Reference:
+        Salehi, S. S. M., Erdogmus, D., & Gholipour, A. (2017).
+        Tversky loss function for image segmentation using 3D fully
+        convolutional deep networks. *MLMI Workshop, MICCAI*.
+
+    Args:
+        alpha: Weight for false positives.
+        beta: Weight for false negatives.
+        smooth: Smoothing constant to avoid division by zero.
+        ignore_index: Target value that is ignored.
+        reduction: ``"mean"`` or ``"sum"`` over classes.
+        weight: Optional per-class weights tensor of shape ``(C,)``.
+    """
+
+    def __init__(
+        self,
+        alpha: float = 0.5,
+        beta: float = 0.5,
+        smooth: float = 1.0,
+        ignore_index: int = -100,
+        reduction: str = "mean",
+        weight: Optional[torch.Tensor] = None,
+    ):
+        super().__init__()
+        self.alpha = alpha
+        self.beta = beta
+        self.smooth = smooth
+        self.ignore_index = ignore_index
+        self.reduction = reduction
+        self.weight = weight
+
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        """Compute Tversky loss.
+
+        Args:
+            inputs: Predictions of shape ``(N, C, H, W)`` (logits).
+            targets: Ground truth of shape ``(N, H, W)`` with class indices.
+
+        Returns:
+            Scalar loss when ``reduction`` is ``"mean"`` or ``"sum"``,
+            or a per-class tensor of shape ``(C,)`` when ``"none"``.
+        """
+        num_classes = inputs.shape[1]
+        one_hot, valid_mask = _one_hot_with_ignore(
+            targets, num_classes, self.ignore_index
+        )
+        probs = F.softmax(inputs, dim=1)
+        probs = probs * valid_mask.unsqueeze(1)  # zero out ignored pixels
+
+        dims = (0, 2, 3)
+        tp = (probs * one_hot).sum(dim=dims)
+        fp = (probs * (1.0 - one_hot)).sum(dim=dims)
+        fn = ((1.0 - probs) * one_hot).sum(dim=dims)
+        tversky = (tp + self.smooth) / (
+            tp + self.alpha * fp + self.beta * fn + self.smooth
+        )
+        loss = 1.0 - tversky  # (C,)
+
+        if self.weight is not None:
+            w = self.weight.to(loss.device)
+            loss = loss * w
+
+        if self.reduction == "mean":
+            return loss.mean()
+        elif self.reduction == "sum":
+            return loss.sum()
+        elif self.reduction == "none":
+            return loss
+        raise ValueError(f"Unknown reduction: {self.reduction!r}")
+
+
+class UnifiedFocalLoss(nn.Module):
+    """Unified Focal Loss combining distribution-based and region-based losses.
+
+    Implements the framework from Yeung et al. (2021) which unifies focal
+    cross-entropy (distribution-based) and focal Tversky (region-based) losses
+    into a single compound loss.  This is particularly effective for semantic
+    segmentation with severe class imbalance.
+
+    The combined loss is::
+
+        L = lambda_ * L_dist + (1 - lambda_) * L_region
+
+    where ``L_dist`` is focal cross-entropy and ``L_region`` is focal Tversky.
+
+    Reference:
+        Yeung, M., Sala, E., Schönlieb, C.-B., & Rundo, L. (2021).
+        Unified Focal loss: Generalising Dice and cross entropy-based losses
+        to handle class imbalanced medical image segmentation.
+        *Computerized Medical Imaging and Graphics*, 95, 102026.
+
+    Note:
+        Inspired by the implementation in the
+        `terrainseg <https://github.com/maxwell-geospatial/terrainseg>`_
+        package by Maxwell (2026).
+
+    Args:
+        lambda_: Balance between distribution and region components.
+            ``1.0`` = pure focal CE, ``0.0`` = pure focal Tversky.
+        gamma: Focusing parameter for both components.  Higher values
+            down-weight easy examples more aggressively.
+        delta: Tversky false-negative weight; false-positive weight is
+            ``1 - delta``.  Values > 0.5 emphasise recall.
+        smooth: Smoothing constant for the Tversky denominator.
+        ignore_index: Target value that is ignored.
+        weight: Per-class weights for the distribution (focal CE) component.
+        region_weight: Per-class weights for the region (focal Tversky)
+            component.  Falls back to ``weight`` if *None*.
+        use_log_cosh: Apply ``log(cosh(loss))`` for gradient smoothing.
+    """
+
+    def __init__(
+        self,
+        lambda_: float = 0.5,
+        gamma: float = 0.75,
+        delta: float = 0.6,
+        smooth: float = 1.0,
+        ignore_index: int = -100,
+        weight: Optional[torch.Tensor] = None,
+        region_weight: Optional[torch.Tensor] = None,
+        use_log_cosh: bool = False,
+    ):
+        super().__init__()
+        self.lambda_ = lambda_
+        self.gamma = gamma
+        self.delta = delta
+        self.smooth = smooth
+        self.ignore_index = ignore_index
+        self.weight = weight
+        self.region_weight = region_weight
+        self.use_log_cosh = use_log_cosh
+
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        """Compute unified focal loss.
+
+        Args:
+            inputs: Predictions of shape ``(N, C, H, W)`` (logits).
+            targets: Ground truth of shape ``(N, H, W)`` with class indices.
+
+        Returns:
+            Scalar loss value.
+        """
+        # --- Distribution component: focal cross-entropy ---
+        ce = F.cross_entropy(
+            inputs,
+            targets,
+            weight=self.weight.to(inputs.device) if self.weight is not None else None,
+            ignore_index=self.ignore_index,
+            reduction="none",
+        )
+        p_t = torch.exp(-ce)
+        focal_ce = ((1.0 - p_t) ** self.gamma) * ce
+
+        # Mean over valid pixels
+        valid = targets != self.ignore_index
+        if valid.any():
+            dist_loss = focal_ce[valid].mean()
+        else:
+            dist_loss = focal_ce.mean()
+
+        # --- Region component: focal Tversky ---
+        num_classes = inputs.shape[1]
+        one_hot, valid_mask = _one_hot_with_ignore(
+            targets, num_classes, self.ignore_index
+        )
+        probs = F.softmax(inputs, dim=1)
+        probs = probs * valid_mask.unsqueeze(1)  # zero out ignored pixels
+
+        dims = (0, 2, 3)
+        tp = (probs * one_hot).sum(dim=dims)
+        fp = (probs * (1.0 - one_hot)).sum(dim=dims)
+        fn = ((1.0 - probs) * one_hot).sum(dim=dims)
+        tversky = (tp + self.smooth) / (
+            tp + (1.0 - self.delta) * fp + self.delta * fn + self.smooth
+        )
+        focal_tversky = (1.0 - tversky) ** self.gamma  # (C,)
+
+        rw = self.region_weight if self.region_weight is not None else self.weight
+        if rw is not None:
+            rw = rw.to(focal_tversky.device)
+            focal_tversky = focal_tversky * rw
+
+        region_loss = focal_tversky.mean()
+
+        # --- Combine ---
+        loss = self.lambda_ * dist_loss + (1.0 - self.lambda_) * region_loss
+
+        if self.use_log_cosh:
+            # Numerically stable log-cosh: |x| + softplus(-2|x|) - log(2)
+            abs_loss = torch.abs(loss)
+            loss = abs_loss + F.softplus(-2.0 * abs_loss) - 0.6931471805599453
+
+        return loss
+
+
+>>>>>>> upstream/main
 def landcover_iou(
     pred: torch.Tensor,
     target: torch.Tensor,
     num_classes: int,
+<<<<<<< HEAD
     ignore_index: Optional[int] = None,
     smooth: float = 1e-6,
     mode: str = "mean",
     boundary_weight_map: Optional[torch.Tensor] = None,
+=======
+    ignore_index: Union[int, bool] = False,
+    smooth: float = 1e-6,
+    mode: str = "mean",
+    boundary_weight_map: Optional[torch.Tensor] = None,
+    background_class: Optional[int] = None,
+>>>>>>> upstream/main
 ) -> Union[float, Tuple[float, List[float], List[int]]]:
     """
     Calculate IoU for landcover classification with multiple weighting options.
 
+<<<<<<< HEAD
     Supports three IoU calculation modes:
     1. "mean": Simple mean IoU across all classes
     2. "perclass_frequency": Weight by per-class pixel frequency
     3. "boundary_weighted": Weight by distance to class boundaries
+=======
+    Supports four IoU calculation modes:
+    1. "mean": Simple mean IoU across all classes
+    2. "perclass_frequency": Weight by per-class pixel frequency
+    3. "boundary_weighted": Weight by distance to class boundaries
+    4. "sparse_labels": For incomplete ground truth - only penalize FP where GT is positive
+       (does NOT penalize predictions in unlabeled/background areas)
+>>>>>>> upstream/main
 
     Args:
         pred: Predicted classes (N, H, W) or logits (N, C, H, W)
@@ -154,13 +489,23 @@ def landcover_iou(
         num_classes: Number of classes
         ignore_index: Class index to ignore (default: None)
         smooth: Smoothing factor to avoid division by zero
+<<<<<<< HEAD
         mode: IoU calculation mode ("mean", "perclass_frequency", "boundary_weighted")
         boundary_weight_map: Optional boundary weights (N, H, W)
+=======
+        mode: IoU calculation mode ("mean", "perclass_frequency", "boundary_weighted", "sparse_labels")
+        boundary_weight_map: Optional boundary weights (N, H, W)
+        background_class: Background/unlabeled class for sparse_labels mode (default: 0)
+>>>>>>> upstream/main
 
     Returns:
         If mode == "mean": float (mean IoU)
         If mode == "perclass_frequency": tuple (weighted IoU, per-class IoUs, class counts)
         If mode == "boundary_weighted": float (boundary-weighted IoU)
+<<<<<<< HEAD
+=======
+        If mode == "sparse_labels": tuple (sparse IoU, per-class IoUs, per-class recall, per-class precision)
+>>>>>>> upstream/main
     """
 
     # Convert logits to class predictions if needed
@@ -168,6 +513,7 @@ def landcover_iou(
         pred = torch.argmax(pred, dim=1)
 
     # Ensure correct shape
+<<<<<<< HEAD
     assert (
         pred.shape == target.shape
     ), f"Shape mismatch: pred {pred.shape}, target {target.shape}"
@@ -176,13 +522,28 @@ def landcover_iou(
     if ignore_index is not None:
         valid_mask = target != ignore_index
     else:
+=======
+    if pred.shape != target.shape:
+        raise ValueError(f"Shape mismatch: pred {pred.shape}, target {target.shape}")
+
+    # Create mask for valid pixels
+    # Handle ignore_index: int means specific class, False means don't ignore
+    if isinstance(ignore_index, int):
+        valid_mask = target != ignore_index
+    else:
+        # ignore_index is False or any other non-int value - don't ignore anything
+>>>>>>> upstream/main
         valid_mask = torch.ones_like(target, dtype=torch.bool)
 
     # Simple mean IoU
     if mode == "mean":
         ious = []
         for cls in range(num_classes):
+<<<<<<< HEAD
             if ignore_index is not None and cls == ignore_index:
+=======
+            if isinstance(ignore_index, int) and cls == ignore_index:
+>>>>>>> upstream/main
                 continue
 
             pred_cls = (pred == cls) & valid_mask
@@ -203,7 +564,11 @@ def landcover_iou(
         class_counts = []
 
         # Filter out ignore_index from target
+<<<<<<< HEAD
         if ignore_index is not None:
+=======
+        if isinstance(ignore_index, int):
+>>>>>>> upstream/main
             target_filtered = target[valid_mask]
             pred_filtered = pred[valid_mask]
         else:
@@ -213,7 +578,11 @@ def landcover_iou(
         total_valid_pixels = target_filtered.numel()
 
         for cls in range(num_classes):
+<<<<<<< HEAD
             if ignore_index is not None and cls == ignore_index:
+=======
+            if isinstance(ignore_index, int) and cls == ignore_index:
+>>>>>>> upstream/main
                 continue
 
             pred_cls = pred_filtered == cls
@@ -250,7 +619,11 @@ def landcover_iou(
         weights = []
 
         for cls in range(num_classes):
+<<<<<<< HEAD
             if ignore_index is not None and cls == ignore_index:
+=======
+            if isinstance(ignore_index, int) and cls == ignore_index:
+>>>>>>> upstream/main
                 continue
 
             pred_cls = (pred == cls) & valid_mask
@@ -278,21 +651,109 @@ def landcover_iou(
 
         return weighted_iou
 
+<<<<<<< HEAD
     else:
         raise ValueError(
             f"Unknown mode: {mode}. Use 'mean', 'perclass_frequency', or 'boundary_weighted'"
+=======
+    # Sparse labels IoU - for incomplete ground truth
+    # Key insight: background (0) means "unlabeled", not "definitely not this class"
+    # So we DON'T penalize predictions in background areas
+    elif mode == "sparse_labels":
+        # Default background class is 0 if not specified
+        bg_class = background_class if background_class is not None else 0
+
+        ious = []
+        recalls = []
+        precisions = []
+        per_class_ious = []
+
+        # Mask for labeled pixels (ground truth is NOT background)
+        labeled_mask = target != bg_class
+        if isinstance(ignore_index, int):
+            labeled_mask = labeled_mask & (target != ignore_index)
+
+        for cls in range(num_classes):
+            # Skip background class and ignore_index
+            if cls == bg_class:
+                per_class_ious.append(0.0)
+                recalls.append(0.0)
+                precisions.append(0.0)
+                continue
+            if isinstance(ignore_index, int) and cls == ignore_index:
+                per_class_ious.append(0.0)
+                recalls.append(0.0)
+                precisions.append(0.0)
+                continue
+
+            # Where prediction says this class
+            pred_cls = pred == cls
+            # Where ground truth says this class
+            target_cls = target == cls
+
+            # TRUE POSITIVE: Prediction matches target (both say this class)
+            tp = (pred_cls & target_cls).sum().float()
+
+            # FALSE NEGATIVE: Target says this class but prediction doesn't
+            fn = (target_cls & ~pred_cls).sum().float()
+
+            # FALSE POSITIVE (SPARSE VERSION):
+            # Prediction says this class, target says DIFFERENT class (but NOT background)
+            # Key: We don't count predictions in background as FP!
+            fp_sparse = (pred_cls & ~target_cls & labeled_mask).sum().float()
+
+            # Standard IoU but with sparse FP definition
+            # Union = TP + FN + FP_sparse
+            union_sparse = tp + fn + fp_sparse
+
+            if union_sparse > 0:
+                iou = (tp + smooth) / (union_sparse + smooth)
+                ious.append(iou.item())
+                per_class_ious.append(iou.item())
+            else:
+                per_class_ious.append(0.0)
+
+            # Also compute recall and precision for diagnostic purposes
+            # Recall: Of all true positives, how many did we find?
+            if (tp + fn) > 0:
+                recall = tp / (tp + fn)
+                recalls.append(recall.item())
+            else:
+                recalls.append(0.0)
+
+            # Precision (sparse): Of predictions in labeled areas, how many are correct?
+            if (tp + fp_sparse) > 0:
+                precision = tp / (tp + fp_sparse)
+                precisions.append(precision.item())
+            else:
+                precisions.append(0.0)
+
+        # Mean IoU across classes (excluding background)
+        mean_sparse_iou = sum(ious) / len(ious) if ious else 0.0
+
+        return mean_sparse_iou, per_class_ious, recalls, precisions
+
+    else:
+        raise ValueError(
+            f"Unknown mode: {mode}. Use 'mean', 'perclass_frequency', 'boundary_weighted', or 'sparse_labels'"
+>>>>>>> upstream/main
         )
 
 
 def get_landcover_loss_function(
     loss_name: str = "crossentropy",
     num_classes: int = 2,
+<<<<<<< HEAD
     ignore_index: Optional[int] = None,
+=======
+    ignore_index: Union[int, bool] = -100,
+>>>>>>> upstream/main
     class_weights: Optional[torch.Tensor] = None,
     use_class_weights: bool = False,
     focal_alpha: float = 1.0,
     focal_gamma: float = 2.0,
     device: Optional[torch.device] = None,
+<<<<<<< HEAD
 ) -> nn.Module:
     """
     Get loss function configured for landcover classification.
@@ -309,6 +770,47 @@ def get_landcover_loss_function(
 
     Returns:
         Configured loss function
+=======
+    smooth: float = 1.0,
+    tversky_alpha: float = 0.5,
+    tversky_beta: float = 0.5,
+    ufl_lambda: float = 0.5,
+    ufl_gamma: float = 0.75,
+    ufl_delta: float = 0.6,
+    region_weights: Optional[torch.Tensor] = None,
+    use_log_cosh: bool = False,
+) -> nn.Module:
+    """Get loss function configured for landcover segmentation.
+
+    Args:
+        loss_name: Name of loss function. One of ``"crossentropy"``,
+            ``"focal"``, ``"dice"``, ``"tversky"``, ``"unified_focal"``
+            (alias ``"ufl"``).
+        num_classes: Number of classes.
+        ignore_index: Class index to ignore, or ``False`` to not ignore any
+            class.
+        class_weights: Manual class weights tensor.
+        use_class_weights: Whether to use class weights.
+        focal_alpha: Alpha parameter for focal loss.
+        focal_gamma: Gamma parameter for focal loss.
+        device: Device to place loss function on.
+        smooth: Smoothing constant for Dice / Tversky denominator.
+        tversky_alpha: False-positive weight for Tversky loss.
+        tversky_beta: False-negative weight for Tversky loss.
+        ufl_lambda: Balance between distribution and region components in
+            Unified Focal Loss (``1.0`` = pure focal CE, ``0.0`` = pure
+            focal Tversky).
+        ufl_gamma: Focusing parameter for Unified Focal Loss.
+        ufl_delta: Tversky false-negative weight for Unified Focal Loss
+            (false-positive weight is ``1 - ufl_delta``).
+        region_weights: Per-class weights for the region component of
+            Unified Focal Loss.  Falls back to *class_weights* if ``None``.
+        use_log_cosh: Apply ``log(cosh(loss))`` stabilisation in Unified
+            Focal Loss.
+
+    Returns:
+        Configured loss function.
+>>>>>>> upstream/main
     """
 
     if device is None:
@@ -316,6 +818,7 @@ def get_landcover_loss_function(
 
     loss_name = loss_name.lower()
 
+<<<<<<< HEAD
     if loss_name == "crossentropy":
         weights = class_weights if use_class_weights else None
         if weights is not None:
@@ -324,10 +827,23 @@ def get_landcover_loss_function(
         return LandcoverCrossEntropyLoss(
             weight=weights,
             ignore_index=ignore_index,
+=======
+    # Common helpers
+    weights = class_weights if use_class_weights else None
+    if weights is not None:
+        weights = weights.to(device)
+    idx = ignore_index if isinstance(ignore_index, int) else -100
+
+    if loss_name == "crossentropy":
+        return LandcoverCrossEntropyLoss(
+            weight=weights,
+            ignore_index=idx,
+>>>>>>> upstream/main
             reduction="mean",
         )
 
     elif loss_name == "focal":
+<<<<<<< HEAD
         weights = class_weights if use_class_weights else None
         if weights is not None:
             weights = weights.to(device)
@@ -335,6 +851,8 @@ def get_landcover_loss_function(
         # Use -100 as default ignore_index for compatibility
         idx = ignore_index if ignore_index is not None else -100
 
+=======
+>>>>>>> upstream/main
         return FocalLoss(
             alpha=focal_alpha,
             gamma=focal_gamma,
@@ -343,6 +861,7 @@ def get_landcover_loss_function(
             weight=weights,
         )
 
+<<<<<<< HEAD
     else:
         # Fall back to standard PyTorch loss
         weights = class_weights if use_class_weights else None
@@ -352,6 +871,43 @@ def get_landcover_loss_function(
         # Use -100 as default ignore_index for compatibility
         idx = ignore_index if ignore_index is not None else -100
 
+=======
+    elif loss_name == "dice":
+        return DiceLoss(
+            smooth=smooth,
+            ignore_index=idx,
+            reduction="mean",
+            weight=weights,
+        )
+
+    elif loss_name == "tversky":
+        return TverskyLoss(
+            alpha=tversky_alpha,
+            beta=tversky_beta,
+            smooth=smooth,
+            ignore_index=idx,
+            reduction="mean",
+            weight=weights,
+        )
+
+    elif loss_name in ("unified_focal", "ufl"):
+        rw = region_weights
+        if rw is not None:
+            rw = rw.to(device)
+        return UnifiedFocalLoss(
+            lambda_=ufl_lambda,
+            gamma=ufl_gamma,
+            delta=ufl_delta,
+            smooth=smooth,
+            ignore_index=idx,
+            weight=weights,
+            region_weight=rw,
+            use_log_cosh=use_log_cosh,
+        )
+
+    else:
+        # Fall back to standard PyTorch loss
+>>>>>>> upstream/main
         return nn.CrossEntropyLoss(
             weight=weights,
             ignore_index=idx,
@@ -362,7 +918,11 @@ def get_landcover_loss_function(
 def compute_class_weights(
     labels_dir: str,
     num_classes: int,
+<<<<<<< HEAD
     ignore_index: Optional[int] = None,
+=======
+    ignore_index: Union[int, bool] = -100,
+>>>>>>> upstream/main
     custom_multipliers: Optional[Dict[int, float]] = None,
     max_weight: float = 50.0,
     use_inverse_frequency: bool = True,
@@ -373,7 +933,13 @@ def compute_class_weights(
     Args:
         labels_dir: Directory containing label files
         num_classes: Number of classes
+<<<<<<< HEAD
         ignore_index: Class index to ignore when computing weights (default: None)
+=======
+        ignore_index: Class index to ignore when computing weights.
+            - If int: specific class to ignore (pixels will be excluded from weight calc)
+            - If False: no class ignored (all classes contribute to weights)
+>>>>>>> upstream/main
         custom_multipliers: Custom multipliers for specific classes after inverse frequency calculation.
             Format: {class_id: multiplier}
             Example: {1: 0.5, 7: 2.0} - reduce class 1 weight by half, double class 7 weight
@@ -401,20 +967,32 @@ def compute_class_weights(
         if f.lower().endswith(label_extensions)
     ]
 
+<<<<<<< HEAD
     print(f"Computing class weights from {len(label_files)} label files...")
+=======
+    logger.info("Computing class weights from %d label files...", len(label_files))
+>>>>>>> upstream/main
 
     for label_file in label_files:
         try:
             with rasterio.open(label_file) as src:
                 label_data = src.read(1)
                 for class_id in range(num_classes):
+<<<<<<< HEAD
                     if ignore_index is not None and class_id == ignore_index:
+=======
+                    if isinstance(ignore_index, int) and class_id == ignore_index:
+>>>>>>> upstream/main
                         continue
                     count = (label_data == class_id).sum()
                     class_counts[class_id] += int(count)
                     total_pixels += int(count)
         except Exception as e:
+<<<<<<< HEAD
             print(f"Warning: Could not read {label_file}: {e}")
+=======
+            logger.warning("Could not read %s: %s", label_file, e)
+>>>>>>> upstream/main
             continue
 
     if total_pixels == 0:
@@ -426,7 +1004,11 @@ def compute_class_weights(
     if use_inverse_frequency:
         # Compute inverse frequency weights
         for class_id in range(num_classes):
+<<<<<<< HEAD
             if ignore_index is not None and class_id == ignore_index:
+=======
+            if isinstance(ignore_index, int) and class_id == ignore_index:
+>>>>>>> upstream/main
                 weights[class_id] = 0.0
             elif class_counts[class_id] > 0:
                 # Inverse frequency: total_pixels / class_pixels
@@ -441,19 +1023,31 @@ def compute_class_weights(
     else:
         # Use uniform weights (all 1.0)
         for class_id in range(num_classes):
+<<<<<<< HEAD
             if ignore_index is not None and class_id == ignore_index:
+=======
+            if isinstance(ignore_index, int) and class_id == ignore_index:
+>>>>>>> upstream/main
                 weights[class_id] = 0.0
 
     # Apply custom multipliers if provided
     if custom_multipliers:
+<<<<<<< HEAD
         print(f"\n🎯 Applying custom multipliers: {custom_multipliers}")
         for class_id, multiplier in custom_multipliers.items():
             if class_id < 0 or class_id >= num_classes:
                 print(f"Warning: Invalid class_id {class_id}, skipping")
+=======
+        logger.info("Applying custom multipliers: %s", custom_multipliers)
+        for class_id, multiplier in custom_multipliers.items():
+            if class_id < 0 or class_id >= num_classes:
+                logger.warning("Invalid class_id %d, skipping", class_id)
+>>>>>>> upstream/main
                 continue
 
             original_weight = weights[class_id].item()
             weights[class_id] = weights[class_id] * multiplier
+<<<<<<< HEAD
             print(
                 f"  Class {class_id}: {original_weight:.4f} × {multiplier} = {weights[class_id].item():.4f}"
             )
@@ -467,11 +1061,34 @@ def compute_class_weights(
         if weights[class_id] > max_weight:
             print(
                 f"  Class {class_id}: {weights[class_id].item():.4f} → {max_weight} (capped)"
+=======
+            logger.info(
+                "  Class %d: %.4f x %s = %.4f",
+                class_id,
+                original_weight,
+                multiplier,
+                weights[class_id].item(),
+            )
+    else:
+        logger.info("No custom multipliers provided, using computed weights as-is")
+
+    # Apply maximum weight cap to prevent extreme values
+    weights_capped = False
+    logger.info("Applying maximum weight cap of %s...", max_weight)
+    for class_id in range(num_classes):
+        if weights[class_id] > max_weight:
+            logger.info(
+                "  Class %d: %.4f -> %s (capped)",
+                class_id,
+                weights[class_id].item(),
+                max_weight,
+>>>>>>> upstream/main
             )
             weights[class_id] = max_weight
             weights_capped = True
 
     if not weights_capped:
+<<<<<<< HEAD
         print("  No weights exceeded the cap")
 
     print(f"\nClass pixel counts: {dict(class_counts)}")
@@ -486,6 +1103,25 @@ def compute_class_weights(
 
     if ignore_index is not None and 0 <= ignore_index < num_classes:
         print(f"\n⚠️  Note: Class {ignore_index} (ignore_index) has weight 0.0")
+=======
+        logger.info("  No weights exceeded the cap")
+
+    logger.info("Class pixel counts: %s", dict(class_counts))
+    logger.info("Final class weights:")
+    for class_id in range(num_classes):
+        pixel_count = class_counts.get(class_id, 0)
+        percent = (pixel_count / total_pixels * 100) if total_pixels > 0 else 0
+        logger.info(
+            "  Class %d: weight=%.4f, pixels=%s (%.2f%%)",
+            class_id,
+            weights[class_id].item(),
+            f"{pixel_count:,}",
+            percent,
+        )
+
+    if isinstance(ignore_index, int) and 0 <= ignore_index < num_classes:
+        logger.info("Note: Class %d (ignore_index) has weight 0.0", ignore_index)
+>>>>>>> upstream/main
 
     return weights
 
@@ -517,25 +1153,49 @@ def train_segmentation_landcover(
     resize_mode: str = "resize",
     num_workers: Optional[int] = None,
     loss_function: str = "crossentropy",
+<<<<<<< HEAD
     ignore_index: Optional[int] = None,
     use_class_weights: bool = False,
     focal_alpha: float = 1.0,
     focal_gamma: float = 2.0,
+=======
+    ignore_index: Union[int, bool] = 0,
+    use_class_weights: bool = False,
+    focal_alpha: float = 1.0,
+    focal_gamma: float = 2.0,
+    smooth: float = 1.0,
+    tversky_alpha: float = 0.5,
+    tversky_beta: float = 0.5,
+    ufl_lambda: float = 0.5,
+    ufl_gamma: float = 0.75,
+    ufl_delta: float = 0.6,
+    region_weights: Optional[torch.Tensor] = None,
+    use_log_cosh: bool = False,
+>>>>>>> upstream/main
     custom_multipliers: Optional[Dict[int, float]] = None,
     max_class_weight: float = 50.0,
     use_inverse_frequency: bool = True,
     validation_iou_mode: str = "standard",
     boundary_alpha: float = 1.0,
+<<<<<<< HEAD
     training_callback: Optional[callable] = None,
     **kwargs: Any,
 ) -> torch.nn.Module:
     """
     Train a semantic segmentation model with landcover-specific enhancements.
+=======
+    background_class: int = 0,
+    training_callback: Optional[callable] = None,
+    **kwargs: Any,
+) -> torch.nn.Module:
+    """Train a semantic segmentation model with landcover-specific enhancements.
+>>>>>>> upstream/main
 
     This is a standalone version that wraps geoai.train.train_segmentation_model
     with landcover-specific loss functions, class weights, and metrics.
 
     Args:
+<<<<<<< HEAD
         images_dir: Directory containing training images
         labels_dir: Directory containing training labels
         output_dir: Directory to save model checkpoints and training history
@@ -577,6 +1237,72 @@ def train_segmentation_landcover(
             Higher values = more focus on boundaries (0.01-100 range)
         training_callback: Optional callback function for automatic metric tracking
         **kwargs: Additional arguments passed to base training function
+=======
+        images_dir: Directory containing training images.
+        labels_dir: Directory containing training labels.
+        output_dir: Directory to save model checkpoints and training history.
+        input_format: Data format (``"directory"``, ``"COCO"``, ``"YOLO"``).
+        architecture: Model architecture (default: ``"unet"``).
+        encoder_name: Encoder backbone (default: ``"resnet34"``).
+        encoder_weights: Pretrained weights (``"imagenet"`` or ``None``).
+        num_channels: Number of input channels (default: 3).
+        num_classes: Number of output classes (default: 2).
+        batch_size: Training batch size (default: 8).
+        num_epochs: Number of training epochs (default: 50).
+        learning_rate: Initial learning rate (default: 0.001).
+        weight_decay: Weight decay for optimizer (default: 1e-4).
+        seed: Random seed for reproducibility (default: 42).
+        val_split: Validation split ratio (default: 0.2).
+        print_freq: Frequency of training progress prints (default: 10).
+        verbose: Enable verbose output (default: True).
+        save_best_only: Only save best model checkpoint (default: True).
+        plot_curves: Plot training curves at end (default: False).
+        device: Torch device (auto-detected if ``None``).
+        checkpoint_path: Path to checkpoint for resuming training.
+        resume_training: Whether to resume from checkpoint (default: False).
+        target_size: Target size for resizing images ``(H, W)`` or ``None``.
+        resize_mode: How to resize (``"resize"``, ``"crop"``, or ``"pad"``).
+        num_workers: Number of dataloader workers (default: auto).
+        loss_function: Loss function name. One of ``"crossentropy"``,
+            ``"focal"``, ``"dice"``, ``"tversky"``, ``"unified_focal"``
+            (alias ``"ufl"``).
+        ignore_index: Class index to ignore during training (default: 0).
+            Set to ``False`` so that all pixels contribute to the loss.
+        use_class_weights: Whether to compute and use class weights
+            (default: False).
+        focal_alpha: Focal loss alpha parameter (default: 1.0).
+        focal_gamma: Focal loss gamma parameter (default: 2.0).
+        smooth: Smoothing constant for Dice / Tversky denominator
+            (default: 1.0).
+        tversky_alpha: False-positive weight for Tversky loss (default: 0.5).
+        tversky_beta: False-negative weight for Tversky loss (default: 0.5).
+            Increase relative to *tversky_alpha* to improve recall.
+        ufl_lambda: Balance between distribution and region components in
+            Unified Focal Loss (default: 0.5).
+        ufl_gamma: Focusing parameter for Unified Focal Loss (default: 0.75).
+        ufl_delta: Tversky false-negative weight inside Unified Focal Loss
+            (default: 0.6).
+        region_weights: Per-class weights for the region component of
+            Unified Focal Loss.  Falls back to *class_weights* if ``None``.
+        use_log_cosh: Apply ``log(cosh(loss))`` stabilisation in Unified
+            Focal Loss (default: False).
+        custom_multipliers: Custom class weight multipliers
+            ``{class_id: multiplier}``.
+        max_class_weight: Maximum allowed class weight (default: 50.0).
+        use_inverse_frequency: Use inverse frequency for weights
+            (default: True).
+        validation_iou_mode: IoU calculation mode for validation
+            (default: ``"standard"``).  Options:
+            ``"standard"``, ``"perclass_frequency"``,
+            ``"boundary_weighted"``, ``"sparse_labels"``.
+        boundary_alpha: Boundary importance factor for wIoU mode
+            (default: 1.0).
+        background_class: Class ID for background/unlabeled pixels in
+            sparse_labels mode (default: 0).
+        training_callback: Optional callback function for automatic metric
+            tracking.
+        **kwargs: Additional arguments passed to base training function.
+>>>>>>> upstream/main
 
     Returns:
         Trained model
@@ -600,6 +1326,7 @@ def train_segmentation_landcover(
         ... )
     """
 
+<<<<<<< HEAD
     # Import geoai training function
     try:
         from geoai.train import train_segmentation_model
@@ -622,12 +1349,35 @@ def train_segmentation_landcover(
             labels_dir=labels_dir,
             num_classes=num_classes,
             ignore_index=ignore_index if ignore_index is not None else -100,
+=======
+    # Convert ignore_index to format expected by PyTorch loss functions
+    if isinstance(ignore_index, bool) and ignore_index is False:
+        ignore_idx_for_loss = -100  # PyTorch default (effectively no ignoring)
+    elif isinstance(ignore_index, int):
+        ignore_idx_for_loss = ignore_index
+    else:
+        ignore_idx_for_loss = -100
+
+    # Compute class weights if requested
+    class_weights_tensor = None
+    if use_class_weights:
+        if verbose:
+            logger.info("=" * 60)
+            logger.info("COMPUTING CLASS WEIGHTS")
+            logger.info("=" * 60)
+
+        class_weights_tensor = compute_class_weights(
+            labels_dir=labels_dir,
+            num_classes=num_classes,
+            ignore_index=ignore_index,
+>>>>>>> upstream/main
             custom_multipliers=custom_multipliers,
             max_weight=max_class_weight,
             use_inverse_frequency=use_inverse_frequency,
         )
 
         if verbose:
+<<<<<<< HEAD
             print("=" * 60 + "\n")
 
     # Call base training function with enhanced parameters
@@ -636,6 +1386,92 @@ def train_segmentation_landcover(
         labels_dir=labels_dir,
         output_dir=output_dir,
         input_format=input_format,
+=======
+            logger.info("=" * 60)
+
+    # Create custom loss function using landcover-specific implementation
+    # This ensures ignore_index and class_weights are properly used
+    import torch
+
+    device = (
+        device
+        if device is not None
+        else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    )
+
+    if class_weights_tensor is not None:
+        class_weights_tensor = class_weights_tensor.to(device)
+
+    # Create the loss function with proper ignore_index support
+    criterion = get_landcover_loss_function(
+        loss_name=loss_function,
+        num_classes=num_classes,
+        ignore_index=ignore_idx_for_loss,
+        class_weights=class_weights_tensor,
+        use_class_weights=use_class_weights,
+        focal_alpha=focal_alpha,
+        focal_gamma=focal_gamma,
+        device=device,
+        smooth=smooth,
+        tversky_alpha=tversky_alpha,
+        tversky_beta=tversky_beta,
+        ufl_lambda=ufl_lambda,
+        ufl_gamma=ufl_gamma,
+        ufl_delta=ufl_delta,
+        region_weights=region_weights,
+        use_log_cosh=use_log_cosh,
+    )
+
+    if verbose:
+        logger.info(
+            "Created %s loss function with ignore_index=%s",
+            loss_function,
+            ignore_idx_for_loss,
+        )
+        if use_class_weights:
+            logger.info("Class weights applied: %s", class_weights_tensor)
+
+    # ==========================================================================
+    # ALL MODES: Use custom training loop with landcover_iou for model selection
+    # ==========================================================================
+    # This ensures ALL IoU modes work correctly, not just sparse_labels
+    # The base geoai training function ignores validation_iou_mode parameter
+
+    if verbose:
+        mode_descriptions = {
+            "standard": "STANDARD (unweighted mean IoU)",
+            "perclass_frequency": "PER-CLASS FREQUENCY-WEIGHTED IoU",
+            "boundary_weighted": f"BOUNDARY-WEIGHTED IoU (wIoU, α={boundary_alpha})",
+            "sparse_labels": f"SPARSE LABELS IoU (bg={background_class} ignored)",
+        }
+        logger.info("=" * 60)
+        logger.info(
+            "CUSTOM TRAINING LOOP: %s",
+            mode_descriptions.get(validation_iou_mode, validation_iou_mode),
+        )
+        logger.info("=" * 60)
+        if validation_iou_mode == "sparse_labels":
+            logger.info(
+                "Background class: %d (predictions here NOT penalized)",
+                background_class,
+            )
+        elif validation_iou_mode == "boundary_weighted":
+            logger.info(
+                "Boundary alpha: %s (higher = more focus on boundaries)",
+                boundary_alpha,
+            )
+        elif validation_iou_mode == "perclass_frequency":
+            logger.info("Classes weighted by pixel frequency in dataset")
+        logger.info(
+            "Using %s IoU for model selection during training", validation_iou_mode
+        )
+        logger.info("=" * 60)
+
+    model = _train_with_custom_iou(
+        images_dir=images_dir,
+        labels_dir=labels_dir,
+        output_dir=output_dir,
+>>>>>>> upstream/main
         architecture=architecture,
         encoder_name=encoder_name,
         encoder_weights=encoder_weights,
@@ -655,6 +1491,7 @@ def train_segmentation_landcover(
         checkpoint_path=checkpoint_path,
         resume_training=resume_training,
         target_size=target_size,
+<<<<<<< HEAD
         resize_mode=resize_mode,
         num_workers=num_workers,
         loss_function=loss_function,
@@ -670,16 +1507,876 @@ def train_segmentation_landcover(
         training_callback=training_callback,
         **kwargs,
     )
+=======
+        num_workers=num_workers,
+        criterion=criterion,
+        validation_iou_mode=validation_iou_mode,
+        boundary_alpha=boundary_alpha,
+        background_class=background_class,
+        ignore_index=(
+            ignore_idx_for_loss
+            if isinstance(ignore_idx_for_loss, int) and ignore_idx_for_loss != -100
+            else False
+        ),
+        training_callback=training_callback,
+        **kwargs,
+    )
+    return model
+
+
+def _compute_boundary_weight_map(
+    target: torch.Tensor,
+    alpha: float = 1.0,
+    num_classes: int = None,
+) -> torch.Tensor:
+    """
+    Compute boundary weight map for boundary-weighted IoU.
+
+    Pixels near class boundaries get higher weight.
+    Uses distance transform from scipy.
+
+    Args:
+        target: Ground truth tensor (N, H, W)
+        alpha: Weight decay rate (higher = sharper boundary focus)
+        num_classes: Number of classes (for edge detection)
+
+    Returns:
+        Weight map (N, H, W) with values in [0, 1]
+    """
+    import numpy as np
+    from scipy import ndimage
+
+    batch_size = target.shape[0]
+    weight_maps = []
+
+    for b in range(batch_size):
+        label = target[b].numpy()
+
+        # Find boundaries using gradient magnitude
+        # Boundaries are where adjacent pixels have different classes
+        gradient_x = np.abs(np.diff(label, axis=1, prepend=label[:, :1]))
+        gradient_y = np.abs(np.diff(label, axis=0, prepend=label[:1, :]))
+        boundary = (gradient_x > 0) | (gradient_y > 0)
+
+        # Compute distance transform from boundaries
+        # Distance is 0 at boundary, increases away from boundary
+        if boundary.any():
+            distance = ndimage.distance_transform_edt(~boundary)
+            # Normalize distance to [0, 1]
+            max_dist = distance.max()
+            if max_dist > 0:
+                distance = distance / max_dist
+            # Compute weight: exp(-alpha * distance)
+            # At boundary (distance=0): weight = 1.0
+            # Far from boundary: weight approaches 0
+            weight = np.exp(-alpha * distance)
+        else:
+            # No boundaries found - uniform weight
+            weight = np.ones_like(label, dtype=np.float32)
+
+        weight_maps.append(torch.from_numpy(weight.astype(np.float32)))
+
+    return torch.stack(weight_maps, dim=0)
+
+
+def _train_with_custom_iou(
+    images_dir: str,
+    labels_dir: str,
+    output_dir: str,
+    architecture: str,
+    encoder_name: str,
+    encoder_weights: Optional[str],
+    num_channels: int,
+    num_classes: int,
+    batch_size: int,
+    num_epochs: int,
+    learning_rate: float,
+    weight_decay: float,
+    seed: int,
+    val_split: float,
+    print_freq: int,
+    verbose: bool,
+    save_best_only: bool,
+    plot_curves: bool,
+    device: torch.device,
+    checkpoint_path: Optional[str],
+    resume_training: bool,
+    target_size: Optional[Tuple[int, int]],
+    num_workers: Optional[int],
+    criterion: nn.Module,
+    validation_iou_mode: str,
+    boundary_alpha: float,
+    background_class: int,
+    ignore_index: Union[int, bool],
+    training_callback: Optional[callable],
+    **kwargs,
+) -> torch.nn.Module:
+    """
+    Internal training function with custom IoU modes for model selection.
+
+    This implements a custom training loop that uses landcover_iou with
+    the specified mode for validation and model selection, instead of
+    the standard geoai IoU which only supports mean IoU.
+
+    Supports all landcover_iou modes:
+    - "standard": Simple unweighted mean IoU
+    - "perclass_frequency": Classes weighted by pixel frequency
+    - "boundary_weighted": Pixels near boundaries weighted more (wIoU)
+    - "sparse_labels": FP only counted where ground truth is positive
+    """
+    import os
+    import platform
+    import rasterio
+    import numpy as np
+    from PIL import Image
+    from sklearn.model_selection import train_test_split
+    from torch.utils.data import DataLoader, Dataset
+
+    # Try to import segmentation_models_pytorch
+    try:
+        import segmentation_models_pytorch as smp
+    except ImportError:
+        raise ImportError(
+            "segmentation_models_pytorch not found. Install with: pip install segmentation-models-pytorch"
+        )
+
+    # Set random seed for reproducibility
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+
+    # Create output directory
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Get image and label files
+    image_extensions = (".tif", ".tiff", ".png", ".jpg", ".jpeg")
+    image_files = sorted(
+        [
+            os.path.join(images_dir, f)
+            for f in os.listdir(images_dir)
+            if f.lower().endswith(image_extensions)
+        ]
+    )
+    label_files = sorted(
+        [
+            os.path.join(labels_dir, f)
+            for f in os.listdir(labels_dir)
+            if f.lower().endswith(image_extensions)
+        ]
+    )
+
+    # Ensure matching files
+    if len(image_files) != len(label_files):
+        logger.warning("Number of image files and label files don't match!")
+        basenames = [os.path.basename(f) for f in image_files]
+        label_files = [
+            os.path.join(labels_dir, os.path.basename(f))
+            for f in image_files
+            if os.path.exists(os.path.join(labels_dir, os.path.basename(f)))
+        ]
+        image_files = [
+            f
+            for f, b in zip(image_files, basenames)
+            if os.path.exists(os.path.join(labels_dir, b))
+        ]
+        logger.info("Using %d matching files", len(image_files))
+
+    logger.info(
+        "Found %d image files and %d label files", len(image_files), len(label_files)
+    )
+
+    if len(image_files) == 0:
+        raise FileNotFoundError("No matching image and label files found")
+
+    # Split data into train and validation sets
+    train_imgs, val_imgs, train_labels, val_labels = train_test_split(
+        image_files, label_files, test_size=val_split, random_state=seed
+    )
+
+    logger.info(
+        "Training on %d images, validating on %d images",
+        len(train_imgs),
+        len(val_imgs),
+    )
+
+    # Simple dataset class for sparse labels training
+    class SparseLabelsDataset(Dataset):
+        def __init__(self, image_files, label_files, num_channels, target_size=None):
+            self.image_files = image_files
+            self.label_files = label_files
+            self.num_channels = num_channels
+            self.target_size = target_size
+
+        def __len__(self):
+            return len(self.image_files)
+
+        def __getitem__(self, idx):
+            # Load image
+            img_path = self.image_files[idx]
+            if img_path.lower().endswith((".tif", ".tiff")):
+                with rasterio.open(img_path) as src:
+                    image = src.read()[: self.num_channels]  # (C, H, W)
+            else:
+                with Image.open(img_path) as img:
+                    image = np.array(img)
+                    if image.ndim == 2:
+                        image = np.expand_dims(image, 0)
+                    elif image.ndim == 3:
+                        image = np.transpose(image, (2, 0, 1))
+                    image = image[: self.num_channels]
+
+            # Load label
+            label_path = self.label_files[idx]
+            if label_path.lower().endswith((".tif", ".tiff")):
+                with rasterio.open(label_path) as src:
+                    label = src.read(1)  # (H, W)
+            else:
+                with Image.open(label_path) as lbl:
+                    label = np.array(lbl)
+
+            # Normalize image to 0-1
+            image = image.astype(np.float32)
+            if image.max() > 1.0:
+                image = image / 255.0
+
+            # Resize if needed
+            if self.target_size is not None:
+                from PIL import Image as PILImage
+
+                # Resize image
+                c, h, w = image.shape
+                img_pil = PILImage.fromarray(
+                    (image.transpose(1, 2, 0) * 255).astype(np.uint8)
+                )
+                img_pil = img_pil.resize(
+                    (self.target_size[1], self.target_size[0]), PILImage.BILINEAR
+                )
+                image = np.array(img_pil).astype(np.float32) / 255.0
+                if image.ndim == 2:
+                    image = np.expand_dims(image, 0)
+                else:
+                    image = image.transpose(2, 0, 1)
+
+                # Resize label
+                lbl_pil = PILImage.fromarray(label.astype(np.uint8))
+                lbl_pil = lbl_pil.resize(
+                    (self.target_size[1], self.target_size[0]), PILImage.NEAREST
+                )
+                label = np.array(lbl_pil)
+
+            return torch.from_numpy(image), torch.from_numpy(label.astype(np.int64))
+
+    # Create datasets
+    train_dataset = SparseLabelsDataset(
+        train_imgs, train_labels, num_channels, target_size
+    )
+    val_dataset = SparseLabelsDataset(val_imgs, val_labels, num_channels, target_size)
+
+    # Create data loaders
+    if num_workers is None:
+        num_workers = 0 if platform.system() in ["Darwin", "Windows"] else 4
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+
+    # Test data loader
+    logger.info("Testing data loader...")
+    try:
+        next(iter(train_loader))
+        logger.info("Data loader test passed.")
+    except RuntimeError as e:
+        if "stack expects each tensor to be equal size" in str(e):
+            raise RuntimeError(
+                "Images have different sizes and cannot be batched together. "
+                "Please set target_size parameter to standardize image dimensions. "
+                f"Example: target_size=(512, 512). Original error: {str(e)}"
+            ) from e
+        else:
+            raise
+
+    # Initialize model using segmentation_models_pytorch
+    arch_map = {
+        "unet": smp.Unet,
+        "unetplusplus": smp.UnetPlusPlus,
+        "deeplabv3": smp.DeepLabV3,
+        "deeplabv3plus": smp.DeepLabV3Plus,
+        "fpn": smp.FPN,
+        "pspnet": smp.PSPNet,
+        "linknet": smp.Linknet,
+        "manet": smp.MAnet,
+        "pan": smp.PAN,
+    }
+
+    if architecture.lower() not in arch_map:
+        raise ValueError(
+            f"Unknown architecture: {architecture}. Available: {list(arch_map.keys())}"
+        )
+
+    model = arch_map[architecture.lower()](
+        encoder_name=encoder_name,
+        encoder_weights=encoder_weights,
+        in_channels=num_channels,
+        classes=num_classes,
+        activation=None,
+    )
+    model.to(device)
+
+    # Enable multi-GPU training if available
+    if torch.cuda.device_count() > 1:
+        logger.info("Using %d GPUs for training", torch.cuda.device_count())
+        model = torch.nn.DataParallel(model)
+
+    # ===== PERFORMANCE OPTIMIZATIONS =====
+    # Enable cuDNN auto-tuner for optimal conv algorithms (fixed input size)
+    if torch.cuda.is_available():
+        torch.backends.cudnn.benchmark = True
+        logger.info("cuDNN benchmark mode enabled")
+
+    # Setup mixed precision training (AMP) for ~2x speedup
+    use_amp = torch.cuda.is_available()
+    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+    if use_amp:
+        logger.info("Mixed precision training (AMP) enabled")
+
+    logger.info("Starting training with %s + %s", architecture, encoder_name)
+    logger.info(
+        "Model parameters: %s", f"{sum(p.numel() for p in model.parameters()):,}"
+    )
+
+    # Setup optimizer and scheduler
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=learning_rate, weight_decay=weight_decay
+    )
+    lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode="max", factor=0.5, patience=5
+    )
+
+    # Training state
+    best_iou = 0.0
+    start_epoch = 0
+    train_losses = []
+    val_losses = []
+    val_ious = []
+
+    # Load checkpoint if provided
+    if checkpoint_path is not None and os.path.exists(checkpoint_path):
+        logger.info("Loading checkpoint from %s", checkpoint_path)
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        if isinstance(checkpoint, dict):
+            if "model_state_dict" in checkpoint:
+                model.load_state_dict(checkpoint["model_state_dict"])
+                if resume_training:
+                    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+                    start_epoch = checkpoint.get("epoch", 0) + 1
+                    best_iou = checkpoint.get("best_iou", 0.0)
+                    logger.info(
+                        "Resuming from epoch %d, best IoU: %.4f",
+                        start_epoch,
+                        best_iou,
+                    )
+        else:
+            model.load_state_dict(checkpoint)
+
+    # Training loop
+    mode_labels = {
+        "standard": "STANDARD (unweighted mean)",
+        "mean": "STANDARD (unweighted mean)",
+        "perclass_frequency": "PER-CLASS FREQUENCY-WEIGHTED",
+        "boundary_weighted": f"BOUNDARY-WEIGHTED (wIoU, α={boundary_alpha})",
+        "sparse_labels": f"SPARSE LABELS (bg={background_class} ignored)",
+    }
+    logger.info(
+        "Starting training with %s IoU...",
+        mode_labels.get(validation_iou_mode, validation_iou_mode),
+    )
+
+    for epoch in range(start_epoch, num_epochs):
+        # ===== TRAINING PHASE =====
+        model.train()
+        epoch_loss = 0.0
+        num_batches = 0
+
+        for batch_idx, (images, targets) in enumerate(train_loader):
+            # Non-blocking transfers overlap CPU→GPU copy with computation
+            images = images.to(device, non_blocking=True)
+            targets = targets.to(device, non_blocking=True)
+
+            # set_to_none=True is faster than zero_grad()
+            optimizer.zero_grad(set_to_none=True)
+
+            # Mixed precision forward pass
+            with torch.cuda.amp.autocast(enabled=use_amp):
+                outputs = model(images)
+                loss = criterion(outputs, targets)
+
+            # Scaled backward pass for mixed precision
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+
+            epoch_loss += loss.item()
+            num_batches += 1
+
+            if verbose and batch_idx % print_freq == 0:
+                logger.debug(
+                    "  Epoch %d [%d/%d] Loss: %.4f",
+                    epoch + 1,
+                    batch_idx,
+                    len(train_loader),
+                    loss.item(),
+                )
+
+        train_loss = epoch_loss / num_batches
+        train_losses.append(train_loss)
+
+        # ===== VALIDATION PHASE WITH CUSTOM IoU =====
+        model.eval()
+        val_loss = 0.0
+        all_preds = []
+        all_targets = []
+
+        with torch.no_grad():
+            for images, targets in val_loader:
+                # Non-blocking transfers
+                images = images.to(device, non_blocking=True)
+                targets = targets.to(device, non_blocking=True)
+
+                # Mixed precision inference
+                with torch.cuda.amp.autocast(enabled=use_amp):
+                    outputs = model(images)
+                    loss = criterion(outputs, targets)
+                val_loss += loss.item()
+
+                # Collect predictions and targets for custom IoU
+                # Keep argmax on GPU, only move final result to CPU
+                preds = torch.argmax(outputs, dim=1).cpu()
+                all_preds.append(preds)
+                all_targets.append(targets.cpu())
+
+        val_loss = val_loss / len(val_loader)
+        val_losses.append(val_loss)
+
+        # Concatenate all predictions and targets
+        all_preds = torch.cat(all_preds, dim=0)
+        all_targets = torch.cat(all_targets, dim=0)
+
+        # Calculate IoU based on validation_iou_mode
+        # Map "standard" to "mean" for landcover_iou
+        iou_mode = "mean" if validation_iou_mode == "standard" else validation_iou_mode
+
+        if iou_mode == "mean":
+            # Standard mean IoU
+            val_iou = landcover_iou(
+                pred=all_preds,
+                target=all_targets,
+                num_classes=num_classes,
+                ignore_index=ignore_index,
+                mode="mean",
+            )
+            iou_display = f"Val IoU: {val_iou:.4f}"
+
+        elif iou_mode == "perclass_frequency":
+            # Per-class frequency weighted IoU
+            val_iou, per_class_ious, class_counts = landcover_iou(
+                pred=all_preds,
+                target=all_targets,
+                num_classes=num_classes,
+                ignore_index=ignore_index,
+                mode="perclass_frequency",
+            )
+            iou_display = f"Val wIoU: {val_iou:.4f} (freq-weighted)"
+
+        elif iou_mode == "boundary_weighted":
+            # Boundary-weighted IoU - compute boundary weight map
+            boundary_weight_map = _compute_boundary_weight_map(
+                all_targets, alpha=boundary_alpha, num_classes=num_classes
+            )
+            val_iou = landcover_iou(
+                pred=all_preds,
+                target=all_targets,
+                num_classes=num_classes,
+                ignore_index=ignore_index,
+                mode="boundary_weighted",
+                boundary_weight_map=boundary_weight_map,
+            )
+            iou_display = f"Val wIoU: {val_iou:.4f} (boundary, α={boundary_alpha})"
+
+        elif iou_mode == "sparse_labels":
+            # Sparse labels IoU - FP only in labeled areas
+            val_iou, per_class_ious, recalls, precisions = landcover_iou(
+                pred=all_preds,
+                target=all_targets,
+                num_classes=num_classes,
+                ignore_index=ignore_index,
+                mode="sparse_labels",
+                background_class=background_class,
+            )
+            iou_display = (
+                f"Val Sparse IoU: {val_iou:.4f} (bg={background_class} ignored)"
+            )
+
+        else:
+            raise ValueError(f"Unknown validation_iou_mode: {validation_iou_mode}")
+
+        val_ious.append(val_iou)
+
+        # Update learning rate based on IoU
+        lr_scheduler.step(val_iou)
+
+        # Print metrics
+        logger.info(
+            "Epoch %d/%d: Train Loss: %.4f, Val Loss: %.4f, %s",
+            epoch + 1,
+            num_epochs,
+            train_loss,
+            val_loss,
+            iou_display,
+        )
+
+        # Call training callback if provided
+        if training_callback is not None:
+            try:
+                # Determine if this is the best epoch
+                is_best = val_iou > best_iou
+
+                # Call callback with positional arguments
+                training_callback(
+                    epoch=epoch,
+                    train_loss=train_loss,
+                    val_loss=val_loss,
+                    val_iou=val_iou,
+                    val_dice=0.0,  # Dice score not computed in this loop
+                    is_best=is_best,
+                )
+            except Exception as e:
+                logger.warning("Training callback error: %s", e)
+
+        # Save best model based on validation IoU
+        if val_iou > best_iou:
+            best_iou = val_iou
+            logger.info("New best model! %s", iou_display)
+            torch.save(model.state_dict(), os.path.join(output_dir, "best_model.pth"))
+
+        # Save checkpoint every 10 epochs if not save_best_only
+        if not save_best_only and ((epoch + 1) % 10 == 0 or epoch == num_epochs - 1):
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "scheduler_state_dict": lr_scheduler.state_dict(),
+                    "best_iou": best_iou,
+                    "architecture": architecture,
+                    "encoder_name": encoder_name,
+                    "num_channels": num_channels,
+                    "num_classes": num_classes,
+                    "train_losses": train_losses,
+                    "val_losses": val_losses,
+                    "val_ious": val_ious,
+                    "validation_iou_mode": validation_iou_mode,
+                },
+                os.path.join(output_dir, f"checkpoint_epoch_{epoch+1}.pth"),
+            )
+
+    # Mode-agnostic display labels
+    mode_labels = {
+        "standard": "Standard IoU",
+        "mean": "Mean IoU",
+        "perclass_frequency": "Frequency-Weighted IoU",
+        "boundary_weighted": "Boundary-Weighted IoU",
+        "sparse_labels": "Sparse Labels IoU",
+    }
+    iou_label = mode_labels.get(validation_iou_mode, validation_iou_mode)
+
+    logger.info("Training complete! Best %s: %.4f", iou_label, best_iou)
+    logger.info("Best model saved to: %s", os.path.join(output_dir, "best_model.pth"))
+
+    # Plot training curves if requested
+    if plot_curves:
+        try:
+            import matplotlib.pyplot as plt
+
+            fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+            # Loss plot
+            axes[0].plot(train_losses, label="Train Loss")
+            axes[0].plot(val_losses, label="Val Loss")
+            axes[0].set_xlabel("Epoch")
+            axes[0].set_ylabel("Loss")
+            axes[0].set_title("Training and Validation Loss")
+            axes[0].legend()
+
+            # IoU plot
+            axes[1].plot(val_ious, label=f"Val {iou_label}", color="green")
+            axes[1].axhline(
+                y=best_iou, color="r", linestyle="--", label=f"Best: {best_iou:.4f}"
+            )
+            axes[1].set_xlabel("Epoch")
+            axes[1].set_ylabel(iou_label)
+            axes[1].set_title(f"Validation {iou_label}")
+            axes[1].legend()
+
+            plt.tight_layout()
+            plot_filename = f"training_curves_{validation_iou_mode}.png"
+            plt.savefig(os.path.join(output_dir, plot_filename), dpi=150)
+            plt.show()
+            logger.info(
+                "Training curves saved to: %s",
+                os.path.join(output_dir, plot_filename),
+            )
+        except Exception as e:
+            logger.warning("Could not plot training curves: %s", e)
+
+    # Load best model weights
+    best_model_path = os.path.join(output_dir, "best_model.pth")
+    if os.path.exists(best_model_path):
+        model.load_state_dict(torch.load(best_model_path, map_location=device))
+        logger.info("Loaded best model (%s: %.4f)", iou_label, best_iou)
+>>>>>>> upstream/main
 
     return model
 
 
+<<<<<<< HEAD
 # Export main functions
 __all__ = [
     "FocalLoss",
     "LandcoverCrossEntropyLoss",
+=======
+def evaluate_sparse_iou(
+    model: torch.nn.Module,
+    images_dir: str,
+    labels_dir: str,
+    num_classes: int,
+    num_channels: int = 3,
+    batch_size: int = 8,
+    background_class: int = 0,
+    ignore_index: Union[int, bool] = False,
+    device: Optional[torch.device] = None,
+    verbose: bool = True,
+) -> Dict[str, Any]:
+    """
+    Evaluate a trained model using sparse labels IoU.
+
+    This function is designed for incomplete/sparse ground truth where
+    background (0) means "unlabeled" rather than "definitely not this class".
+    Predictions in background areas are NOT penalized as false positives.
+
+    Use this for post-training evaluation when your training masks are incomplete.
+
+    Args:
+        model: Trained segmentation model
+        images_dir: Directory containing validation images
+        labels_dir: Directory containing validation labels
+        num_classes: Number of classes
+        num_channels: Number of input channels (default: 3)
+        batch_size: Batch size for evaluation (default: 8)
+        background_class: Class ID for background/unlabeled pixels (default: 0)
+        ignore_index: Class to ignore during evaluation.
+            - If int: specific class index to ignore
+            - If False: no class ignored (default)
+        device: Torch device (auto-detected if None)
+        verbose: Print detailed results (default: True)
+
+    Returns:
+        Dictionary containing:
+        - 'mean_sparse_iou': Mean IoU across all non-background classes
+        - 'per_class_iou': Dict of class_id -> IoU
+        - 'per_class_recall': Dict of class_id -> recall (sensitivity)
+        - 'per_class_precision': Dict of class_id -> precision
+        - 'mean_recall': Mean recall across classes
+        - 'mean_precision': Mean precision across classes
+
+    Example:
+        >>> model = torch.load("best_model.pth")
+        >>> results = evaluate_sparse_iou(
+        ...     model=model,
+        ...     images_dir="tiles/images",
+        ...     labels_dir="tiles/labels",
+        ...     num_classes=18,
+        ...     background_class=0,
+        ... )
+        >>> print(f"Sparse IoU: {results['mean_sparse_iou']:.4f}")
+    """
+    import os
+    import rasterio
+    from torch.utils.data import DataLoader, Dataset
+
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    model.to(device)
+    model.eval()
+
+    # Get all image and label files
+    image_extensions = (".tif", ".tiff", ".png", ".jpg", ".jpeg")
+    image_files = sorted(
+        [
+            os.path.join(images_dir, f)
+            for f in os.listdir(images_dir)
+            if f.lower().endswith(image_extensions)
+        ]
+    )
+    label_files = sorted(
+        [
+            os.path.join(labels_dir, f)
+            for f in os.listdir(labels_dir)
+            if f.lower().endswith(image_extensions)
+        ]
+    )
+
+    if len(image_files) != len(label_files):
+        raise ValueError(
+            f"Mismatch: {len(image_files)} images vs {len(label_files)} labels"
+        )
+
+    if verbose:
+        logger.info("=" * 60)
+        logger.info("SPARSE LABELS IoU EVALUATION")
+        logger.info("=" * 60)
+        logger.info("Evaluating %d image-label pairs", len(image_files))
+        logger.info(
+            "Background class: %d (predictions here NOT penalized)", background_class
+        )
+        logger.info("Number of classes: %d", num_classes)
+
+    # Accumulate predictions and targets
+    all_preds = []
+    all_targets = []
+
+    with torch.no_grad():
+        for i, (img_path, label_path) in enumerate(zip(image_files, label_files)):
+            # Load image
+            with rasterio.open(img_path) as src:
+                image = src.read()[:num_channels]  # (C, H, W)
+
+            # Load label
+            with rasterio.open(label_path) as src:
+                label = src.read(1)  # (H, W)
+
+            # Normalize image to 0-1 range
+            image = image.astype("float32")
+            if image.max() > 1.0:
+                image = image / 255.0
+
+            # Convert to tensor and add batch dimension
+            image_tensor = torch.from_numpy(image).unsqueeze(0).to(device)
+            label_tensor = torch.from_numpy(label).unsqueeze(0)
+
+            # Get prediction
+            output = model(image_tensor)
+            pred = torch.argmax(output, dim=1).cpu()
+
+            all_preds.append(pred)
+            all_targets.append(label_tensor)
+
+            if verbose and (i + 1) % 50 == 0:
+                logger.info("   Processed %d/%d tiles...", i + 1, len(image_files))
+
+    # Concatenate all predictions and targets
+    all_preds = torch.cat(all_preds, dim=0)
+    all_targets = torch.cat(all_targets, dim=0)
+
+    # Calculate sparse IoU
+    mean_iou, per_class_ious, recalls, precisions = landcover_iou(
+        pred=all_preds,
+        target=all_targets,
+        num_classes=num_classes,
+        ignore_index=ignore_index,
+        mode="sparse_labels",
+        background_class=background_class,
+    )
+
+    # Build results dictionary
+    per_class_iou_dict = {}
+    per_class_recall_dict = {}
+    per_class_precision_dict = {}
+
+    class_idx = 0
+    for cls in range(num_classes):
+        if cls == background_class:
+            continue
+        if isinstance(ignore_index, int) and cls == ignore_index:
+            continue
+
+        per_class_iou_dict[cls] = per_class_ious[cls]
+        per_class_recall_dict[cls] = (
+            recalls[class_idx] if class_idx < len(recalls) else 0.0
+        )
+        per_class_precision_dict[cls] = (
+            precisions[class_idx] if class_idx < len(precisions) else 0.0
+        )
+        class_idx += 1
+
+    # Calculate means (excluding background)
+    valid_recalls = [r for r in recalls if r > 0]
+    valid_precisions = [p for p in precisions if p > 0]
+    mean_recall = sum(valid_recalls) / len(valid_recalls) if valid_recalls else 0.0
+    mean_precision = (
+        sum(valid_precisions) / len(valid_precisions) if valid_precisions else 0.0
+    )
+
+    results = {
+        "mean_sparse_iou": mean_iou,
+        "per_class_iou": per_class_iou_dict,
+        "per_class_recall": per_class_recall_dict,
+        "per_class_precision": per_class_precision_dict,
+        "mean_recall": mean_recall,
+        "mean_precision": mean_precision,
+    }
+
+    if verbose:
+        logger.info("SPARSE LABELS IoU RESULTS:")
+        logger.info(
+            "   (Predictions in background areas NOT counted as false positives)"
+        )
+        logger.info("   %-8s %8s %8s %10s", "Class", "IoU", "Recall", "Precision")
+        logger.info("   %s", "-" * 36)
+        for cls in sorted(per_class_iou_dict.keys()):
+            iou = per_class_iou_dict.get(cls, 0.0)
+            recall = per_class_recall_dict.get(cls, 0.0)
+            precision = per_class_precision_dict.get(cls, 0.0)
+            logger.info("   %-8s %8.4f %8.4f %10.4f", cls, iou, recall, precision)
+
+        logger.info("   %s", "-" * 36)
+        logger.info(
+            "   %-8s %8.4f %8.4f %10.4f",
+            "MEAN",
+            mean_iou,
+            mean_recall,
+            mean_precision,
+        )
+        logger.info("Sparse IoU evaluation complete!")
+        logger.info("=" * 60)
+
+    return results
+
+
+# Export main functions
+__all__ = [
+    "DiceLoss",
+    "FocalLoss",
+    "LandcoverCrossEntropyLoss",
+    "TverskyLoss",
+    "UnifiedFocalLoss",
+>>>>>>> upstream/main
     "landcover_iou",
     "get_landcover_loss_function",
     "compute_class_weights",
     "train_segmentation_landcover",
+<<<<<<< HEAD
+=======
+    "evaluate_sparse_iou",
+>>>>>>> upstream/main
 ]

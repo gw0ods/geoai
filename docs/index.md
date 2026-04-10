@@ -6,7 +6,9 @@
 [![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/geoai.svg)](https://anaconda.org/conda-forge/geoai)
 [![Conda Recipe](https://img.shields.io/badge/recipe-geoai-green.svg)](https://github.com/conda-forge/geoai-py-feedstock)
 [![image](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![image](https://img.shields.io/badge/YouTube-Tutorials-red)](https://tinyurl.com/GeoAI-Tutorials)
+[![image](https://img.shields.io/badge/YouTube-Tutorials-red)](https://www.youtube.com/playlist?list=PLAxJ4-o7ZoPcvENqwaPa_QwbbkZ5sctZE)
+[![QGIS](https://img.shields.io/badge/QGIS-plugin-orange.svg)](https://opengeoai.org/qgis_plugin)
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.09605/status.svg)](https://doi.org/10.21105/joss.09605)
 
 [![logo](https://raw.githubusercontent.com/opengeos/geoai/master/docs/assets/logo_rect.png)](https://github.com/opengeos/geoai/blob/master/docs/assets/logo.png)
 
@@ -16,21 +18,28 @@
 
 [GeoAI](https://opengeoai.org) is a comprehensive Python package designed to bridge artificial intelligence (AI) and geospatial data analysis, providing researchers and practitioners with intuitive tools for applying machine learning techniques to geographic data. The package offers a unified framework for processing satellite imagery, aerial photographs, and vector data using state-of-the-art deep learning models. GeoAI integrates popular AI frameworks including [PyTorch](https://pytorch.org), [Transformers](https://github.com/huggingface/transformers), [PyTorch Segmentation Models](https://github.com/qubvel-org/segmentation_models.pytorch), and specialized geospatial libraries like [torchange](https://github.com/Z-Zheng/pytorch-change-models), enabling users to perform complex geospatial analyses with minimal code.
 
-The package provides five core capabilities:
+The package provides six core capabilities:
 
 1. Interactive and programmatic search and download of remote sensing imagery and geospatial data.
 2. Automated dataset preparation with image chips and label generation.
 3. Model training for tasks such as classification, detection, and segmentation.
 4. Inference pipelines for applying models to new geospatial datasets.
 5. Interactive visualization through integration with [Leafmap](https://github.com/opengeos/leafmap/) and [MapLibre](https://github.com/eoda-dev/py-maplibregl).
+6. Seamless QGIS integration via a dedicated GeoAI plugin, enabling users to run AI-powered geospatial workflows directly within the QGIS desktop environment, without writing code.
 
-GeoAI addresses the growing demand for accessible AI tools in geospatial research by providing high-level APIs that abstract complex machine learning workflows while maintaining flexibility for advanced users. The package supports multiple data formats (GeoTIFF, JPEG2000,GeoJSON, Shapefile, GeoPackage) and includes automatic device management for GPU acceleration when available. With over 10 modules and extensive notebook examples, GeoAI serves as both a research tool and educational resource for the geospatial AI community.
+GeoAI addresses the growing demand for accessible AI tools in geospatial research by providing high-level APIs that abstract complex machine learning workflows while maintaining flexibility for advanced users. The package supports multiple data formats (GeoTIFF, JPEG2000, GeoJSON, Shapefile, GeoPackage) and includes automatic device management for GPU acceleration when available. With over 10 modules and extensive notebook examples, GeoAI serves as both a research tool and educational resource for the geospatial AI community.
+
+## 📚 Book
+
+A comprehensive book on GeoAI is available at [https://book.opengeoai.org](https://book.opengeoai.org).
+
+![](https://books.gishub.org/geoai/front-cover.webp)
 
 ## 📝 Statement of Need
 
 The integration of artificial intelligence with geospatial data analysis has become increasingly critical across numerous scientific disciplines, from environmental monitoring and urban planning to disaster response and climate research. However, applying AI techniques to geospatial data presents unique challenges including data preprocessing complexities, specialized model architectures, and the need for domain-specific knowledge in both machine learning and geographic information systems.
 
-Existing solutions often require researchers to navigate fragmented ecosystems of tools, combining general-purpose machine learning libraries with specialized geospatial packages, leading to steep learning curves and reproducibility challenges. While packages like TorchGeo and TerraTorch provide excellent foundational tools for geospatial deep learning, there remains a gap for comprehensive, high-level interfaces that can democratize access to advanced AI techniques for the broader geospatial community.
+Existing solutions often require researchers to navigate fragmented ecosystems of tools, combining general-purpose machine learning libraries with specialized geospatial packages, leading to steep learning curves and reproducibility challenges. While packages like [TorchGeo](https://github.com/torchgeo/torchgeo), [TerraTorch](https://github.com/terrastackai/terratorch), and [SRAI](https://github.com/kraina-ai/srai) provide excellent foundational tools for geospatial deep learning, there remains a gap for comprehensive, high-level interfaces that can democratize access to advanced AI techniques for the broader geospatial community.
 
 GeoAI addresses this need by providing a unified, user-friendly interface that abstracts the complexity of integrating multiple AI frameworks with geospatial data processing workflows. It lowers barriers for: (1) geospatial researchers who need accessible AI workflows without deep ML expertise; (2) AI practitioners who want streamlined geospatial preprocessing and domain-specific datasets; and (3) educators seeking reproducible examples and teaching-ready workflows.
 
@@ -40,7 +49,12 @@ The package's design philosophy emphasizes simplicity without sacrificing functi
 
 If you find GeoAI useful in your research, please consider citing the following paper to support my work. Thank you for your support.
 
+<<<<<<< HEAD
 -   Wu, Q. (2025). GeoAI: A Python package for integrating artificial intelligence with geospatial data analysis and visualization. _Journal of Open Source Software_, 9025. [https://doi.org/10.21105/joss.09025](https://github.com/openjournals/joss-papers/blob/joss.09025/joss.09025/10.21105.joss.09025.pdf) (Under Review)
+=======
+-   Wu, Q., (2026). GeoAI: A Python package for integrating artificial intelligence with geospatial data analysis and visualization. _Journal of Open Source Software_, 11(118), 9605, <https://doi.org/10.21105/joss.09605>.
+-   Wu, Q. (2026). *GeoAI with Python: A Practical Guide to Open-Source Geospatial AI*. Independently published. PDF edition ISBN 979-8993859729; Print edition ISBN 979-8253507414. Available at [https://book.opengeoai.org](https://book.opengeoai.org).
+>>>>>>> upstream/main
 
 ## 🚀 Key Features
 
@@ -63,7 +77,7 @@ If you find GeoAI useful in your research, please consider citing the following 
 
 -   Integration with [PyTorch Segmentation Models](https://github.com/qubvel-org/segmentation_models.pytorch) for automatic feature extraction
 -   Specialized segmentation algorithms optimized for satellite and aerial imagery
--   Streamlined workflows for segmenting buildings, water bodies, wetlands,solar panels, etc.
+-   Streamlined workflows for segmenting buildings, water bodies, wetlands, solar panels, etc.
 -   Export capabilities to standard geospatial formats (GeoJSON, Shapefile, GeoPackage, GeoParquet)
 
 ### 🔍 Image Classification
@@ -98,6 +112,12 @@ conda install -c conda-forge geoai
 ```bash
 mamba install -c conda-forge geoai
 ```
+
+## ⚙️ QGIS Plugin
+
+Check out the [QGIS Plugin](https://opengeoai.org/qgis_plugin/) page if you are interested in using GeoAI with QGIS.
+
+[![demo](https://github.com/user-attachments/assets/5aabc3d3-efd1-4011-ab31-2b3f11aab3ed)](https://youtu.be/8-OhlqeoyiY)
 
 ## 📋 Documentation
 

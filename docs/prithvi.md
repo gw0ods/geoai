@@ -1,0 +1,3 @@
+# prithvi module
+
+::: geoai.prithvi

@@ -6,6 +6,10 @@ for post-processing segmentation masks and classification rasters. MultiClean pe
 morphological operations to smooth edges, remove noise islands, and fill gaps.
 """
 
+<<<<<<< HEAD
+=======
+import logging
+>>>>>>> upstream/main
 import os
 from typing import Optional, List, Union, Tuple
 import numpy as np
@@ -24,6 +28,11 @@ try:
 except ImportError:
     RASTERIO_AVAILABLE = False
 
+<<<<<<< HEAD
+=======
+logger = logging.getLogger(__name__)
+
+>>>>>>> upstream/main
 
 def check_multiclean_available():
     """
@@ -284,7 +293,11 @@ def clean_raster_batch(
 
     for i, input_path in enumerate(input_paths):
         if verbose:
+<<<<<<< HEAD
             print(f"Processing {i+1}/{len(input_paths)}: {input_path}")
+=======
+            logger.info("Processing %s/%s: %s", i + 1, len(input_paths), input_path)
+>>>>>>> upstream/main
 
         # Generate output filename
         basename = os.path.basename(input_path)
@@ -309,11 +322,19 @@ def clean_raster_batch(
             output_paths.append(output_path)
 
             if verbose:
+<<<<<<< HEAD
                 print(f"  ✓ Saved to: {output_path}")
 
         except Exception as e:
             if verbose:
                 print(f"  ✗ Failed: {e}")
+=======
+                logger.info("  ✓ Saved to: %s", output_path)
+
+        except Exception as e:
+            if verbose:
+                logger.error("  ✗ Failed: %s", e)
+>>>>>>> upstream/main
             continue
 
     return output_paths

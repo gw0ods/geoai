@@ -7,7 +7,11 @@ livereload
 mkdocs
 mkdocs-git-revision-date-localized-plugin
 mkdocs-git-revision-date-plugin
+<<<<<<< HEAD
 mkdocs-jupyter>=0.25.1
+=======
+mkdocs-jupyter>=0.25.1,<0.27.0
+>>>>>>> upstream/main
 mkdocs-material>=9.1.3
 mkdocs-pdf-export-plugin
 mkdocstrings
@@ -18,7 +22,7 @@ nbconvert
 nbformat
 pip
 pre-commit
-pygments
+pygments>=2.20.0
 pymdown-extensions
 sphinx
 tox

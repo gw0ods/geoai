@@ -1,11 +1,20 @@
 from __future__ import annotations
 
 import json
+<<<<<<< HEAD
+=======
+import logging
+>>>>>>> upstream/main
 import os
 import uuid
 from types import SimpleNamespace
 from typing import Any, Callable, Dict, Optional
 
+<<<<<<< HEAD
+=======
+logger = logging.getLogger(__name__)
+
+>>>>>>> upstream/main
 import boto3
 import ipywidgets as widgets
 import leafmap.maplibregl as leafmap
@@ -17,6 +26,10 @@ from strands.models import BedrockModel
 from strands.models.anthropic import AnthropicModel
 from strands.models.ollama import OllamaModel as _OllamaModel
 from strands.models.openai import OpenAIModel
+<<<<<<< HEAD
+=======
+from strands.models.gemini import GeminiModel
+>>>>>>> upstream/main
 
 from .catalog_tools import CatalogTools
 from .map_tools import MapSession, MapTools
@@ -202,6 +215,89 @@ def create_bedrock_model(
     )
 
 
+<<<<<<< HEAD
+=======
+def create_gemini_model(
+    model_id: str = "gemini-2.5-flash",
+    api_key: str = None,
+    client_args: dict = None,
+    **kwargs: Any,
+) -> GeminiModel:
+    """Create a Gemini model.
+
+    Args:
+        model_id: Gemini model ID.
+        api_key: Gemini API key.
+        client_args: Client arguments for the Gemini model.
+        **kwargs: Additional keyword arguments for the Gemini model.
+
+    Returns:
+        GeminiModel: A Gemini model.
+    """
+
+    if api_key is None and (client_args is None or "api_key" not in client_args):
+        try:
+            api_key = os.getenv("GOOGLE_API_KEY", None)
+            if api_key is None:
+                raise ValueError("GOOGLE_API_KEY is not set")
+        except Exception:
+            raise ValueError("GOOGLE_API_KEY is not set")
+
+    if client_args is None:
+        client_args = kwargs.get("client_args", {})
+    if "api_key" not in client_args and api_key is not None:
+        client_args["api_key"] = api_key
+
+    return GeminiModel(client_args=client_args, model_id=model_id, **kwargs)
+
+
+def create_minimax_model(
+    model_id: str = "MiniMax-M2.7",
+    api_key: str = None,
+    client_args: dict = None,
+    **kwargs: Any,
+) -> OpenAIModel:
+    """Create a MiniMax model via OpenAI-compatible API.
+
+    MiniMax provides large language models including MiniMax-M2.7 and
+    MiniMax-M2.5-highspeed, accessible through an OpenAI-compatible
+    chat completions endpoint at https://api.minimax.io/v1.
+
+    Args:
+        model_id: MiniMax model ID. Defaults to "MiniMax-M2.7".
+            For a complete list of supported models,
+            see https://platform.minimaxi.com/document/models.
+        api_key: MiniMax API key.
+        client_args: Client arguments for the MiniMax model.
+        **kwargs: Additional keyword arguments for the MiniMax model.
+
+    Returns:
+        OpenAIModel: An OpenAI-compatible model configured for MiniMax.
+    """
+
+    # Normalize client_args first so we can honor an API key passed there.
+    if client_args is None:
+        client_args = kwargs.get("client_args", {}) or {}
+
+    # Determine the effective API key from the function argument, client_args, or env var.
+    effective_api_key = api_key or client_args.get("api_key")
+    if effective_api_key is None:
+        effective_api_key = os.getenv("MINIMAX_API_KEY", None)
+        if effective_api_key is None:
+            raise ValueError(
+                "MiniMax API key must be provided via the api_key argument, "
+                "client_args['api_key'], or the MINIMAX_API_KEY environment variable"
+            )
+
+    if "api_key" not in client_args:
+        client_args["api_key"] = effective_api_key
+    if "base_url" not in client_args:
+        client_args["base_url"] = "https://api.minimax.io/v1"
+
+    return OpenAIModel(client_args=client_args, model_id=model_id, **kwargs)
+
+
+>>>>>>> upstream/main
 class GeoAgent(Agent):
     """Geospatial AI agent with interactive mapping capabilities."""
 
@@ -234,6 +330,14 @@ class GeoAgent(Agent):
             self._model_factory = lambda m=model: create_ollama_model(
                 host="http://localhost:11434", model_id=m, **model_args
             )
+<<<<<<< HEAD
+=======
+        elif isinstance(model, str) and model.lower().startswith("minimax"):
+            # MiniMax models (e.g., "MiniMax-M2.7", "MiniMax-M2.5-highspeed")
+            self._model_factory = lambda m=model: create_minimax_model(
+                model_id=m, **model_args
+            )
+>>>>>>> upstream/main
         elif isinstance(model, OllamaModel):
             # Extract configuration from existing OllamaModel and create new instances
             model_id = model.config["model_id"]
@@ -262,6 +366,18 @@ class GeoAgent(Agent):
                     model_id=mid, client_args=client_args, **model_args
                 )
             )
+<<<<<<< HEAD
+=======
+        elif isinstance(model, GeminiModel):
+            # Extract configuration from existing GeminiModel and create new instances
+            model_id = model.config["model_id"]
+            client_args = model.client_args.copy()
+            self._model_factory: Callable[[], GeminiModel] = (
+                lambda mid=model_id, client_args=client_args: create_gemini_model(
+                    model_id=mid, client_args=client_args, **model_args
+                )
+            )
+>>>>>>> upstream/main
         elif isinstance(model, str):
             # Only Bedrock IDs here, not LLaMA
             self._model_factory = lambda m=model: create_bedrock_model(
@@ -648,7 +764,15 @@ class STACAgent(Agent):
             self._model_factory = lambda m=model: create_ollama_model(
                 host="http://localhost:11434", model_id=m, **model_args
             )
+<<<<<<< HEAD
 
+=======
+        elif isinstance(model, str) and model.lower().startswith("minimax"):
+            # MiniMax models (e.g., "MiniMax-M2.7", "MiniMax-M2.5-highspeed")
+            self._model_factory = lambda m=model: create_minimax_model(
+                model_id=m, **model_args
+            )
+>>>>>>> upstream/main
         elif isinstance(model, OllamaModel):
             # Extract configuration from existing OllamaModel and create new instances
             model_id = model.config["model_id"]
@@ -871,14 +995,22 @@ CRITICAL: Return ONLY JSON. NO explanatory text, NO made-up data."""
         search_payload = self._extract_search_items_payload(result)
         if search_payload is not None:
             if "error" in search_payload:
+<<<<<<< HEAD
                 print(f"Search error: {search_payload['error']}")
+=======
+                logger.error("Search error: %s", search_payload["error"])
+>>>>>>> upstream/main
                 return None
 
             items = search_payload.get("items") or []
             if items:
                 return items[0]
 
+<<<<<<< HEAD
             print("No items found in search results")
+=======
+            logger.warning("No items found in search results")
+>>>>>>> upstream/main
             return None
 
         # Fallback: try to parse the final text response
@@ -888,17 +1020,29 @@ CRITICAL: Return ONLY JSON. NO explanatory text, NO made-up data."""
             item_data = json.loads(response)
 
             if "error" in item_data:
+<<<<<<< HEAD
                 print(f"Search error: {item_data['error']}")
                 return None
 
             if not all(k in item_data for k in ["id", "collection"]):
                 print("Response missing required fields (id, collection)")
+=======
+                logger.error("Search error: %s", item_data["error"])
+                return None
+
+            if not all(k in item_data for k in ["id", "collection"]):
+                logger.warning("Response missing required fields (id, collection)")
+>>>>>>> upstream/main
                 return None
 
             return item_data
 
         except json.JSONDecodeError:
+<<<<<<< HEAD
             print("Could not extract item data from agent response")
+=======
+            logger.warning("Could not extract item data from agent response")
+>>>>>>> upstream/main
             return None
 
     def _visualize_stac_item(self, item: Dict[str, Any]) -> None:
@@ -964,7 +1108,11 @@ CRITICAL: Return ONLY JSON. NO explanatory text, NO made-up data."""
             )
             return assets  # Return the assets that were visualized
         except Exception as e:
+<<<<<<< HEAD
             print(f"Could not visualize item on map: {e}")
+=======
+            logger.error("Could not visualize item on map: %s", e)
+>>>>>>> upstream/main
             return None
 
     def show_ui(self, *, height: int = 700) -> None:
@@ -1290,6 +1438,14 @@ class CatalogAgent(Agent):
             self._model_factory = lambda m=model: create_ollama_model(
                 host="http://localhost:11434", model_id=m, **model_args
             )
+<<<<<<< HEAD
+=======
+        elif isinstance(model, str) and model.lower().startswith("minimax"):
+            # MiniMax models (e.g., "MiniMax-M2.7", "MiniMax-M2.5-highspeed")
+            self._model_factory = lambda m=model: create_minimax_model(
+                model_id=m, **model_args
+            )
+>>>>>>> upstream/main
         elif isinstance(model, OllamaModel):
             # Extract configuration from existing OllamaModel and create new instances
             model_id = model.config["model_id"]
@@ -1482,7 +1638,11 @@ Your response: "Found dataset: USGS/NED - USGS Elevation Data"  ← WRONG! This 
         result = json.loads(result_json)
 
         if "error" in result:
+<<<<<<< HEAD
             print(f"Search error: {result['error']}")
+=======
+            logger.error("Search error: %s", result["error"])
+>>>>>>> upstream/main
             return []
 
         return result.get("datasets", [])

@@ -1,10 +1,10 @@
 """This module provides functionality for segmenting high-resolution satellite imagery using vision-language models."""
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import cv2
 import geopandas as gpd
 import numpy as np
 import rasterio
@@ -21,6 +21,15 @@ from transformers import (
     CLIPSegProcessor,
     pipeline,
 )
+
+__all__ = [
+    "BoundingBox",
+    "DetectionResult",
+    "GroundedSAM",
+    "CLIPSegmentation",
+]
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -123,7 +132,7 @@ class GroundedSAM:
         # Load models
         self._load_models()
 
-        print(f"GroundedSAM initialized on {self.device}")
+        logger.info("GroundedSAM initialized on %s", self.device)
 
     def _load_models(self) -> None:
         """Load the Grounding DINO and SAM models."""
@@ -174,6 +183,8 @@ class GroundedSAM:
         Returns:
             List[DetectionResult]: Filtered detection results.
         """
+        import cv2  # Lazy import to avoid QGIS opencv conflicts
+
         if not detections:
             return detections
 
@@ -235,6 +246,8 @@ class GroundedSAM:
 
     def _mask_to_polygon(self, mask: np.ndarray) -> List[List[int]]:
         """Convert mask to polygon coordinates."""
+        import cv2  # Lazy import to avoid QGIS opencv conflicts
+
         # Find contours in the binary mask
         contours, _ = cv2.findContours(
             mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
@@ -255,6 +268,8 @@ class GroundedSAM:
         self, polygon: List[Tuple[int, int]], image_shape: Tuple[int, int]
     ) -> np.ndarray:
         """Convert polygon to mask."""
+        import cv2  # Lazy import to avoid QGIS opencv conflicts
+
         # Create an empty mask
         mask = np.zeros(image_shape, dtype=np.uint8)
 
@@ -279,6 +294,8 @@ class GroundedSAM:
         Returns:
             List[np.ndarray]: List of individual instance masks.
         """
+        import cv2  # Lazy import to avoid QGIS opencv conflicts
+
         # Find connected components
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
             mask.astype(np.uint8), connectivity=8
@@ -320,6 +337,8 @@ class GroundedSAM:
         Returns:
             List[Dict]: List of polygon dictionaries with geometry and properties.
         """
+        import cv2  # Lazy import to avoid QGIS opencv conflicts
+
         polygons = []
 
         # Get individual instances
@@ -361,8 +380,8 @@ class GroundedSAM:
                         polygon = Polygon(geo_coords)
                         if polygon.is_valid and polygon.area > 0:
                             polygons.append({"geometry": polygon, "area_pixels": area})
-                    except Exception as e:
-                        print(f"Error creating polygon: {e}")
+                    except (ValueError, TypeError) as e:
+                        logger.error("Error creating polygon: %s", e)
                         continue
 
         return polygons
@@ -418,7 +437,7 @@ class GroundedSAM:
         nms_threshold: float = 0.5,
         min_polygon_area: int = 50,
         simplify_tolerance: float = 2.0,
-    ) -> str:
+    ) -> Dict[str, str]:
         """
         Segment a GeoTIFF image using text prompts with improved instance segmentation.
 
@@ -468,7 +487,9 @@ class GroundedSAM:
             n_tiles_y = max(1, int(np.ceil(height / effective_tile_size)))
             total_tiles = n_tiles_x * n_tiles_y
 
-            print(f"Processing {total_tiles} tiles ({n_tiles_x}x{n_tiles_y})")
+            logger.info(
+                "Processing %s tiles (%sx%s)", total_tiles, n_tiles_x, n_tiles_y
+            )
 
             # Process tiles with tqdm progress bar
             with tqdm(total=total_tiles, desc="Processing tiles") as pbar:
@@ -502,8 +523,9 @@ class GroundedSAM:
                                     tile_data[0][:, :, np.newaxis], 3, axis=2
                                 )
                             else:
-                                print(
-                                    f"Unsupported number of bands: {tile_data.shape[0]}"
+                                logger.warning(
+                                    "Unsupported number of bands: %s",
+                                    tile_data.shape[0],
                                 )
                                 continue
 
@@ -665,8 +687,10 @@ class GroundedSAM:
                                             mask_slice,
                                         )
 
-                        except Exception as e:
-                            print(f"Error processing tile at ({x}, {y}): {str(e)}")
+                        except (RuntimeError, ValueError, TypeError, IndexError) as e:
+                            logger.error(
+                                "Error processing tile at (%s, %s): %s", x, y, str(e)
+                            )
                             continue
 
                         # Update progress bar
@@ -697,7 +721,9 @@ class GroundedSAM:
                 gdf = gpd.GeoDataFrame(all_boxes, crs=crs)
                 gdf.to_file(boxes_path, driver="GeoJSON")
                 result_files["boxes"] = boxes_path
-                print(f"Exported {len(all_boxes)} bounding boxes to {boxes_path}")
+                logger.info(
+                    "Exported %s bounding boxes to %s", len(all_boxes), boxes_path
+                )
 
             # Export instance polygons if requested
             if export_polygons and all_polygons:
@@ -705,16 +731,15 @@ class GroundedSAM:
                 gdf = gpd.GeoDataFrame(all_polygons, crs=crs)
                 gdf.to_file(polygons_path, driver="GeoJSON")
                 result_files["polygons"] = polygons_path
-                print(
-                    f"Exported {len(all_polygons)} instance polygons to {polygons_path}"
+                logger.info(
+                    "Exported %s instance polygons to %s",
+                    len(all_polygons),
+                    polygons_path,
                 )
 
-            print(f"Segmentation saved to {output_path}")
-            print(
-                f"Found {len(all_polygons)} individual building instances"
-                if export_polygons
-                else ""
-            )
+            logger.info("Segmentation saved to %s", output_path)
+            if export_polygons:
+                logger.info("Found %s individual building instances", len(all_polygons))
 
             return result_files
 
@@ -728,14 +753,16 @@ class CLIPSegmentation:
 
     Args:
         model_name (str): Name of the CLIP-Seg model to use. Defaults to "CIDAS/clipseg-rd64-refined".
-        device (str): Device to run the model on ('cuda', 'cpu'). If None, will use CUDA if available.
+        device (str): Device to run the model on ('cuda', 'mps', 'cpu').
+            If None, auto-selects the best available device
+            (CUDA > MPS > CPU) via ``get_device()``.
         tile_size (int): Size of tiles to process the image in chunks. Defaults to 352.
         overlap (int): Overlap between tiles to avoid edge artifacts. Defaults to 16.
 
     Attributes:
         processor (CLIPSegProcessor): The processor for the CLIP-Seg model.
         model (CLIPSegForImageSegmentation): The CLIP-Seg model for segmentation.
-        device (str): The device being used ('cuda' or 'cpu').
+        device (str): The device being used ('cuda', 'mps', or 'cpu').
         tile_size (int): Size of tiles for processing.
         overlap (int): Overlap between tiles.
     """
@@ -752,18 +779,20 @@ class CLIPSegmentation:
 
         Args:
             model_name (str): Name of the CLIP-Seg model to use. Defaults to "CIDAS/clipseg-rd64-refined".
-            device (str): Device to run the model on ('cuda', 'cpu'). If None, will use CUDA if available.
+            device (str): Device to run the model on ('cuda', 'mps', 'cpu').
+                If None, auto-selects the best available device
+                (CUDA > MPS > CPU) via ``get_device()``.
             tile_size (int): Size of tiles to process the image in chunks. Defaults to 512.
             overlap (int): Overlap between tiles to avoid edge artifacts. Defaults to 32.
         """
         self.tile_size = tile_size
         self.overlap = overlap
 
-        # Set device
-        if device is None:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        else:
-            self.device = device
+        # Lazy import to avoid pulling in geoai.utils (which eagerly
+        # imports leafmap) at module-collection time.
+        from .utils.device import get_device
+
+        self.device = str(device or get_device())
 
         # Load model and processor
         self.processor = CLIPSegProcessor.from_pretrained(model_name)
@@ -771,7 +800,7 @@ class CLIPSegmentation:
             self.device
         )
 
-        print(f"Model loaded on {self.device}")
+        logger.info("CLIPSeg model loaded on %s", self.device)
 
     def segment_image(
         self,
@@ -843,39 +872,50 @@ class CLIPSegmentation:
 
                         # Process the tile
                         try:
-                            # Convert to RGB if necessary (handling different satellite bands)
-                            if tile_data.shape[0] > 3:
-                                # Use first three bands for RGB representation
+                            # Convert to RGB format
+                            bands = tile_data.shape[0]
+                            if bands >= 3:
                                 rgb_tile = tile_data[:3].transpose(1, 2, 0)
-                                # Normalize data to 0-255 range if needed
-                                if rgb_tile.max() > 0:
-                                    rgb_tile = (
-                                        (rgb_tile - rgb_tile.min())
-                                        / (rgb_tile.max() - rgb_tile.min())
-                                        * 255
-                                    ).astype(np.uint8)
-                            elif tile_data.shape[0] == 1:
-                                # Create RGB from grayscale
+                            elif bands == 1:
                                 rgb_tile = np.repeat(
                                     tile_data[0][:, :, np.newaxis], 3, axis=2
                                 )
-                                # Normalize if needed
-                                if rgb_tile.max() > 0:
-                                    rgb_tile = (
-                                        (rgb_tile - rgb_tile.min())
-                                        / (rgb_tile.max() - rgb_tile.min())
-                                        * 255
-                                    ).astype(np.uint8)
                             else:
-                                # Already 3-channel, assume RGB
-                                rgb_tile = tile_data.transpose(1, 2, 0)
-                                # Normalize if needed
-                                if rgb_tile.max() > 0:
-                                    rgb_tile = (
-                                        (rgb_tile - rgb_tile.min())
-                                        / (rgb_tile.max() - rgb_tile.min())
-                                        * 255
-                                    ).astype(np.uint8)
+                                # 2-band: replicate first band into 3 channels
+                                rgb_tile = np.repeat(
+                                    tile_data[0][:, :, np.newaxis], 3, axis=2
+                                )
+
+                            # Normalize to uint8 if needed
+                            if rgb_tile.dtype == np.uint8:
+                                # Already uint8 — skip normalization
+                                if rgb_tile.max() == 0:
+                                    pbar.update(1)
+                                    continue
+                            else:
+                                # Float / other dtypes: per-channel normalization
+                                rgb_tile = rgb_tile.astype(np.float64)
+                                result_tile = np.empty_like(rgb_tile)
+                                all_zero = True
+                                for ch in range(rgb_tile.shape[2]):
+                                    cmin = rgb_tile[:, :, ch].min()
+                                    cmax = rgb_tile[:, :, ch].max()
+                                    if cmax > cmin:
+                                        result_tile[:, :, ch] = (
+                                            (rgb_tile[:, :, ch] - cmin)
+                                            / (cmax - cmin)
+                                            * 255.0
+                                        )
+                                        all_zero = False
+                                    elif cmax > 0:
+                                        result_tile[:, :, ch] = 128.0
+                                        all_zero = False
+                                    else:
+                                        result_tile[:, :, ch] = 0.0
+                                if all_zero:
+                                    pbar.update(1)
+                                    continue
+                                rgb_tile = result_tile.astype(np.uint8)
 
                             # Convert to PIL Image
                             pil_image = Image.fromarray(rgb_tile)
@@ -955,8 +995,10 @@ class CLIPSegmentation:
                                 valid_y_start:valid_y_end, valid_x_start:valid_x_end
                             ]
 
-                        except Exception as e:
-                            print(f"Error processing tile at ({x}, {y}): {str(e)}")
+                        except (RuntimeError, ValueError, TypeError, IndexError) as e:
+                            logger.warning(
+                                "Error processing tile at (%d, %d): %s", x, y, str(e)
+                            )
                             # Continue with next tile
 
                         # Update progress bar
@@ -974,7 +1016,7 @@ class CLIPSegmentation:
                 dst.set_band_description(1, "Binary Segmentation")
                 dst.set_band_description(2, "Probability Scores")
 
-            print(f"Segmentation saved to {output_path}")
+            logger.info("Segmentation saved to %s", output_path)
             return output_path
 
     def segment_image_batch(

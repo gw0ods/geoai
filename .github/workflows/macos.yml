@@ -24,7 +24,7 @@ jobs:
             - name: Install uv
               uses: astral-sh/setup-uv@v7
               with:
-                  version: "0.4.16"
+                  version: ""
                   enable-cache: false
 
             - name: Install dependencies
@@ -32,6 +32,6 @@ jobs:
                   uv venv --python ${{ matrix.config.py }}
                   uv pip install .
 
-            # - name: Test import
-            #   run: |
-            #       uv run python -c "import geoai; print('geoai import successful')"  # not working due to bitsandbytes
+            - name: Test import
+              run: |
+                  .venv/bin/python -c "import geoai; print('geoai import successful')"

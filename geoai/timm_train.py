@@ -1,5 +1,9 @@
 """Module for training and fine-tuning models using timm (PyTorch Image Models) with remote sensing imagery."""
 
+<<<<<<< HEAD
+=======
+import logging
+>>>>>>> upstream/main
 import os
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -25,6 +29,11 @@ try:
 except ImportError:
     LIGHTNING_AVAILABLE = False
 
+<<<<<<< HEAD
+=======
+logger = logging.getLogger(__name__)
+
+>>>>>>> upstream/main
 
 def get_timm_model(
     model_name: str = "resnet50",
@@ -292,7 +301,11 @@ class TimmClassifier(pl.LightningModule):
         )
 
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+<<<<<<< HEAD
             optimizer, mode="min", factor=0.5, patience=5, verbose=True
+=======
+            optimizer, mode="min", factor=0.5, patience=5
+>>>>>>> upstream/main
         )
 
         return {
@@ -529,7 +542,11 @@ def train_timm_classifier(
     )
 
     # Train model
+<<<<<<< HEAD
     print(f"Training {model_name} for {num_epochs} epochs...")
+=======
+    logger.info("Training %s for %s epochs...", model_name, num_epochs)
+>>>>>>> upstream/main
     trainer.fit(
         model,
         train_dataloaders=train_loader,
@@ -546,10 +563,17 @@ def train_timm_classifier(
             num_workers=num_workers,
             pin_memory=True,
         )
+<<<<<<< HEAD
         print("\nTesting model on test set...")
         trainer.test(model, dataloaders=test_loader)
 
     print(f"\nBest model saved at: {checkpoint_callback.best_model_path}")
+=======
+        logger.info("\nTesting model on test set...")
+        trainer.test(model, dataloaders=test_loader)
+
+    logger.info("\nBest model saved at: %s", checkpoint_callback.best_model_path)
+>>>>>>> upstream/main
 
     return model
 

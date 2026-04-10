@@ -61,6 +61,10 @@ plugins:
                   "examples/building_footprints_*.ipynb",
                   "examples/data_visualization.ipynb",
                   "examples/data_augmentation.ipynb",
+<<<<<<< HEAD
+=======
+                  "examples/flipnslide_augmentation.ipynb",
+>>>>>>> upstream/main
                   "examples/train_*.ipynb",
                   "examples/water_dynamics.ipynb",
                   "examples/wetland_mapping.ipynb",
@@ -71,6 +75,15 @@ plugins:
                   "examples/water_detection.ipynb",
                   "examples/batch_segmentation.ipynb",
                   "examples/building_detection_lidar.ipynb",
+                  "examples/building_detection_whu.ipynb",
+                  "examples/canopy_height.ipynb",
+                  "examples/water_segmentation.ipynb",
+                  "examples/moondream_sliding_window.ipynb",
+                  "examples/torchgeo_embeddings.ipynb",
+                  "examples/image_recognition.ipynb",
+                  "examples/clip_classify_vector.ipynb",
+                  "examples/impervious_surface_mapping.ipynb",
+                  "examples/geodeep_detection.ipynb",
                   "workshops/GeoAI_Workshop_2025.ipynb",
               ]
 
@@ -95,7 +108,10 @@ markdown_extensions:
 
 nav:
     - Home: index.md
+    - Book: https://book.opengeoai.org
     - Installation: installation.md
+    - QGIS Plugin: qgis_plugin.md
+    - Citations: citations.md
     - Contributing: contributing.md
     - Changelog: https://github.com/opengeos/geoai/releases
     - Report Issues: https://github.com/opengeos/geoai/issues
@@ -112,6 +128,10 @@ nav:
           - examples/create_training_data.ipynb
           - examples/export_training_data_formats.ipynb
           - examples/data_augmentation.ipynb
+<<<<<<< HEAD
+=======
+          - examples/flipnslide_augmentation.ipynb
+>>>>>>> upstream/main
           - examples/building_footprints_usa.ipynb
           - examples/building_footprints_africa.ipynb
           - examples/building_footprints_china.ipynb
@@ -127,14 +147,17 @@ nav:
           - examples/train_segmentation_model.ipynb
           - examples/train_instance_segmentation_model.ipynb
           - examples/train_landcover_classification.ipynb
+          - examples/loss_functions_segmentation.ipynb
           - examples/train_building_footprints_usa.ipynb
           - examples/train_solar_panel_detection.ipynb
           - examples/train_car_detection.ipynb
           - examples/train_ship_detection.ipynb
           - examples/train_water_detection.ipynb
+          - examples/object_detection_nwpu.ipynb
           - examples/water_dynamics.ipynb
           - examples/wetland_mapping.ipynb
           - examples/wetland_dynamics.ipynb
+          - examples/wetland_sam3.ipynb
           - examples/regularization.ipynb
           - examples/globe_projection.ipynb
           - examples/samgeo.ipynb
@@ -142,23 +165,59 @@ nav:
           - examples/load_model_checkpoint.ipynb
           - examples/water_detection.ipynb
           - examples/water_detection_s2.ipynb
+          - examples/water_detection_s2_hf.ipynb
+          - examples/water_segmentation.ipynb
           - examples/batch_segmentation.ipynb
           - examples/building_detection_lidar.ipynb
           - examples/instance_segmentation.ipynb
           - examples/change_detection.ipynb
+          - examples/changestar.ipynb
           - examples/JPEG2000.ipynb
           - examples/DINOv3.ipynb
           - examples/DINOv3_visualization.ipynb
           - examples/DINOv3_wetlands.ipynb
+<<<<<<< HEAD
+=======
+          - examples/dinov3_finetune_segmentation.ipynb
+>>>>>>> upstream/main
           - examples/AlphaEarth.ipynb
           - examples/AI_agents.ipynb
           - examples/STAC_agents.ipynb
           - examples/catalog_search_agent.ipynb
           - examples/train_timm_classifier.ipynb
+<<<<<<< HEAD
+=======
+          - examples/image_recognition.ipynb
+>>>>>>> upstream/main
           - examples/train_timm_segmentation.ipynb
           - examples/lightly_train_self_supervised.ipynb
           - examples/clean_segmentation_results.ipynb
           - examples/cloud_detection.ipynb
+<<<<<<< HEAD
+=======
+          - examples/moondream.ipynb
+          - examples/moondream_gui.ipynb
+          - examples/moondream_sliding_window.ipynb
+          - examples/AutoModel.ipynb
+          - examples/onnx.ipynb
+          - examples/smooth_vector.ipynb
+          - examples/timelapse.ipynb
+          - examples/prithvi.ipynb
+          - examples/train_timm_regressor.ipynb
+          - examples/canopy_height.ipynb
+          - examples/smooth_inference.ipynb
+          - examples/tessera.ipynb
+          - examples/torchgeo_embeddings.ipynb
+          - examples/google_satellite_embedding.ipynb
+          - examples/building_detection_whu.ipynb
+          - examples/clip_classify_vector.ipynb
+          - examples/impervious_surface_mapping.ipynb
+          - examples/field_boundary_detection.ipynb
+          - examples/super_resolution.ipynb
+          - examples/geodeep_detection.ipynb
+          - examples/rfdetr_detection.ipynb
+          - examples/image_captioning.ipynb
+>>>>>>> upstream/main
     - Workshops:
           - workshops/GeoAI_Workshop_2025.ipynb
           - workshops/AWS_2025.ipynb
@@ -166,20 +225,56 @@ nav:
           - workshops/CANVAS_2025.ipynb
           - workshops/AGU_2025.ipynb
     - API Reference:
+          - auto module: auto.md
+          - canopy module: canopy.md
+          - caption module: caption.md
           - change_detection module: change_detection.md
           - classify module: classify.md
+          - cli module: cli.md
           - detectron2 module: detectron2.md
           - DINOv3 module: dinov3.md
+<<<<<<< HEAD
+=======
+          - ftw module: ftw.md
+          - geodeep module: geodeep.md
+>>>>>>> upstream/main
           - geo_agents module: geo_agents.md
           - geoai module: geoai.md
           - download module: download.md
+          - embeddings module: embeddings.md
           - extract module: extract.md
           - hf module: hf.md
+<<<<<<< HEAD
+=======
+          - inference module: inference.md
+          - landcover_train module: landcover_train.md
+          - landcover_utils module: landcover_utils.md
+          - object_detect module: object_detect.md
+>>>>>>> upstream/main
           - map_tools module: map_tools.md
           - map_widgets module: map_widgets.md
+          - moondream module: moondream.md
+          - onnx module: onnx.md
+          - prithvi module: prithvi.md
+          - recognize module: recognize.md
+          - rfdetr module: rfdetr.md
           - sam module: sam.md
+          - segment module: segment.md
           - segmentation module: segmentation.md
+<<<<<<< HEAD
           - timm_train module: timm_train.md
           - timm_segment module: timm_segment.md
+=======
+          - tessera module: tessera.md
+          - timm_regress module: timm_regress.md
+          - timm_segment module: timm_segment.md
+          - timm_train module: timm_train.md
+>>>>>>> upstream/main
           - train module: train.md
           - utils module: utils.md
+          - water module: water.md
+          - tools:
+                - sr module: sr.md
+                - cloudmask module: cloudmask.md
+                - multiclean module: multiclean.md
+                - timeseries module: timeseries.md
